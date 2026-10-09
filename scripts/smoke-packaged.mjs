@@ -21,6 +21,28 @@ try {
   const page = await application.firstWindow();
   await page.waitForFunction(() => Boolean(window.harness), undefined, { timeout: 30000 });
   assert.equal(await application.evaluate(({ app }) => app.isPackaged), true);
+  if (process.platform === 'win32') {
+    const launcher = path.join(root, 'packaged CLI fixture.cmd');
+    await writeFile(launcher, '@echo off\r\necho harness-packaged-cli 1.2.3\r\n');
+    const detected = await page.evaluate(
+      async ({ launcher, target }) => {
+        const harness = await window.harness.saveHarness({
+          name: 'Packaged CLI Detection',
+          kind: 'cli',
+          userSkillsPath: target,
+          workspaceSkillsRelativePath: '',
+          executablePaths: [launcher],
+          versionArgs: ['--version'],
+        });
+        return (await window.harness.detectHarnessInstallations({ refresh: true })).find((item) => item.harnessId === harness.id);
+      },
+      { launcher, target: path.join(root, 'cli-skills') },
+    );
+    assert.equal(detected?.status, 'installed');
+    assert.equal(detected?.executable, launcher);
+    assert.equal(detected?.version, 'harness-packaged-cli 1.2.3');
+    console.log('Packaged Windows CLI detection passed: actual .cmd version launcher via preload IPC.');
+  }
   const result = await page.evaluate(
     async ({ source, target }) => {
       const initial = await window.harness.snapshot();

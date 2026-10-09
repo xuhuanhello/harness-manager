@@ -46,6 +46,9 @@ jobs:
       - name: Service regression tests
         if: matrix.platform == 'macos-arm64'
         run: npm test
+      - name: Windows CLI installation regression tests
+        if: matrix.platform == 'windows-x64'
+        run: npx vitest run tests/windows-cli-installation.test.ts
       - name: Build installers
         run: ${{ matrix.command }}
       - name: Desktop regression tests

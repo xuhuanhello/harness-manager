@@ -19,6 +19,7 @@ import { errorCode, isMissingEntryError, isWithin, overlaps } from './fs-utils';
 import { canonicalizePath, expandUserPath, validateWorkspaceRelativePath } from './paths';
 import type { Store } from './store';
 import { appError } from './messages';
+import { runWindowsBatch, windowsBinaryDirectories, windowsEnv, windowsPathEntries } from './windows-cli';
 
 const CACHE_MS = 5 * 60_000;
 const CLEANUP_PREVIEW_MS = 90_000;
@@ -26,6 +27,7 @@ const CLEANUP_PREVIEW_MS = 90_000;
 const COMMAND_TIMEOUT_MS = 5_000;
 const COMMAND_MAX_BUFFER = 16 * 1024;
 const MAX_CANDIDATES = 48;
+const MAX_PATH_DIRECTORIES = 256;
 const MAX_VERSION_ATTEMPTS = 2;
 const MAX_VERSION_LENGTH = 300;
 const DEFAULT_MAX_CONCURRENT = 4;
@@ -100,6 +102,7 @@ interface ExecFailure extends Error {
 }
 
 function runExecFile(file: string, args: string[], options: ExecuteFileOptions): Promise<{ stdout?: string; stderr?: string }> {
+  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(file)) return runWindowsBatch(file, args, options);
   return new Promise((resolve, reject) => {
     nodeExecFile(file, args, options, (error, stdout, stderr) => {
       if (error) {
@@ -129,8 +132,8 @@ function outputVersion(value: string | Buffer | undefined): string | undefined {
   return firstLine ? firstLine.slice(0, MAX_VERSION_LENGTH) : undefined;
 }
 
-function commonBinaryDirectories(home: string, platform: NodeJS.Platform): string[] {
-  if (platform === 'win32') return [path.join(home, 'AppData', 'Local', 'Programs')];
+function commonBinaryDirectories(home: string, platform: NodeJS.Platform, env: NodeJS.ProcessEnv): string[] {
+  if (platform === 'win32') return windowsBinaryDirectories(home, env);
   return [
     path.join(home, '.local', 'bin'),
     path.join(home, '.npm', 'bin'),
@@ -190,6 +193,7 @@ export class HarnessInstallationService {
   private readonly knownHarnesses = new Map<string, Harness>();
   private readonly latestStatus = new Map<string, HarnessInstallationResult['status']>();
   private readonly latestStatusCheckedAt = new Map<string, number>();
+  private registryPaths?: Promise<string[]>;
   private activeDetections = 0;
   private readonly detectionWaiters: Array<() => void> = [];
 
@@ -215,6 +219,7 @@ export class HarnessInstallationService {
   /** Detects only executable/app evidence. Configured skill directories never imply installation. */
   async detect(harnesses: readonly Harness[], options: { refresh?: boolean } = {}): Promise<HarnessInstallationResult[]> {
     const selected = harnesses.filter((harness) => harness && typeof harness.id === 'string' && !!harness.id && isHarnessEnabled(harness));
+    if (options.refresh) this.registryPaths = undefined;
     for (const harness of selected) this.knownHarnesses.set(harness.id, harness);
     this.pruneExpired();
     const detected = await Promise.all(selected.map((harness) => this.detectOne(harness, !!options.refresh)));
@@ -426,7 +431,15 @@ export class HarnessInstallationService {
       : ['--version'];
     const runtimeDirectories = candidates.length ? await this.runtimeDirectories() : [];
     const deadline = Date.now() + this.commandTimeoutMs;
-    for (const candidate of candidates.slice(0, MAX_VERSION_ATTEMPTS)) {
+    let attempts = 0;
+    for (const candidate of candidates) {
+      // Store aliases may open a desktop app/protocol handler instead of a CLI. Never launch them in a passive probe.
+      if (this.platform === 'win32' && /[\\/]Microsoft[\\/]WindowsApps[\\/]/i.test(candidate)) {
+        uncertain = true;
+        continue;
+      }
+      if (attempts >= MAX_VERSION_ATTEMPTS) break;
+      attempts += 1;
       const remaining = deadline - Date.now();
       if (remaining <= 0) {
         uncertain = true;
@@ -544,7 +557,7 @@ export class HarnessInstallationService {
     const add = (value: string) => {
       const resolved = path.resolve(value);
       const key = this.platform === 'win32' ? resolved.toLocaleLowerCase('en-US') : resolved;
-      if (!seen.has(key) && candidates.length < MAX_CANDIDATES) {
+      if (!seen.has(key)) {
         seen.add(key);
         candidates.push(resolved);
       }
@@ -556,17 +569,35 @@ export class HarnessInstallationService {
     if (command && !command.includes('\0')) {
       if (path.isAbsolute(command)) add(command);
       else if (!command.includes('/') && !command.includes('\\')) {
-        const pathValue = this.env.PATH ?? this.env.Path ?? this.env.path ?? '';
+        const pathValue = this.platform === 'win32' ? windowsEnv(this.env, 'PATH') || '' : this.env.PATH || '';
+        const inherited =
+          this.platform === 'win32' ? windowsPathEntries(pathValue, this.env) : pathValue.split(path.delimiter).filter(Boolean);
         const directories = [
-          ...pathValue.split(path.delimiter).filter(Boolean),
-          ...commonBinaryDirectories(this.home, this.platform),
+          ...inherited.slice(0, MAX_PATH_DIRECTORIES),
+          ...(await this.windowsRegistryPaths()),
+          ...commonBinaryDirectories(this.home, this.platform, this.env),
           ...(await this.nvmBinaryDirectories()),
         ];
         const extensions =
-          this.platform === 'win32' ? (path.extname(command) ? [''] : (this.env.PATHEXT ?? '.EXE;.COM').split(';').filter(Boolean)) : [''];
+          this.platform === 'win32'
+            ? path.extname(command)
+              ? ['']
+              : [
+                  ...new Set([
+                    ...(windowsEnv(this.env, 'PATHEXT') || '.COM;.EXE;.BAT;.CMD').split(';').map((ext) => ext.toLowerCase()),
+                    '.exe',
+                    '.cmd',
+                    '.bat',
+                  ]),
+                ].filter((ext) => ['.exe', '.com', '.cmd', '.bat'].includes(ext))
+            : [''];
+        const visitedDirectories = new Set<string>();
         for (const directory of directories) {
+          if (!path.isAbsolute(directory)) continue;
+          const key = this.platform === 'win32' ? path.resolve(directory).toLowerCase() : path.resolve(directory);
+          if (visitedDirectories.has(key)) continue;
+          visitedDirectories.add(key);
           for (const extension of extensions) add(path.join(directory, `${command}${extension}`));
-          if (candidates.length >= MAX_CANDIDATES) break;
         }
       }
     }
@@ -580,12 +611,60 @@ export class HarnessInstallationService {
       } catch (cause) {
         if (errorCode(cause) !== 'ENOENT' && errorCode(cause) !== 'ENOTDIR') existing.push(candidate);
       }
+      // Missing entries in a long Windows PATH must not consume the budget for real installations.
+      if (existing.length >= MAX_CANDIDATES) break;
     }
     return existing;
   }
 
+  private windowsRegistryPaths(): Promise<string[]> {
+    if (this.platform !== 'win32') return Promise.resolve([]);
+    this.registryPaths ??= (async () => {
+      const system = windowsEnv(this.env, 'SystemRoot') || 'C:\\Windows';
+      // A fixed .NET query avoids reg.exe's locale-dependent encoding corrupting non-ASCII installation paths.
+      const script =
+        "[Console]::OutputEncoding = [Text.UTF8Encoding]::new(); ConvertTo-Json -Compress -InputObject @([Environment]::GetEnvironmentVariable('Path','User'), [Environment]::GetEnvironmentVariable('Path','Machine'))";
+      try {
+        const result = await this.execute(
+          path.join(system, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+          ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+          {
+            cwd: this.home,
+            env: this.env,
+            timeout: Math.min(2000, this.commandTimeoutMs),
+            maxBuffer: 128 * 1024,
+            shell: false,
+            windowsHide: true,
+            encoding: 'utf8',
+          },
+        );
+        const values: unknown = JSON.parse(result.stdout?.trim().replace(/^\uFEFF/, '') || '[]');
+        if (Array.isArray(values))
+          return values
+            .filter((value): value is string => typeof value === 'string')
+            .flatMap((value) => windowsPathEntries(value, this.env).slice(0, MAX_PATH_DIRECTORIES));
+      } catch {
+        // Registry access is optional: keep inherited PATH and verified known installation directories.
+      }
+      return [];
+    })();
+    return this.registryPaths;
+  }
+
   private async nvmBinaryDirectories(): Promise<string[]> {
-    if (this.platform === 'win32') return [];
+    if (this.platform === 'win32') {
+      const root =
+        windowsEnv(this.env, 'NVM_HOME') || path.join(windowsEnv(this.env, 'APPDATA') || path.join(this.home, 'AppData', 'Roaming'), 'nvm');
+      try {
+        return (await readdir(root, { withFileTypes: true }))
+          .filter((entry) => entry.isDirectory() && /^v\d+\.\d+\.\d+$/.test(entry.name))
+          .sort((a, b) => b.name.localeCompare(a.name, 'en-US', { numeric: true }))
+          .slice(0, 8)
+          .map((entry) => path.join(root, entry.name));
+      } catch {
+        return [];
+      }
+    }
     const versionsRoot = path.join(this.home, '.nvm', 'versions', 'node');
     try {
       const versions = (await readdir(versionsRoot, { withFileTypes: true }))
@@ -601,7 +680,12 @@ export class HarnessInstallationService {
 
   /** Finder-launched apps inherit a minimal PATH, so `#!/usr/bin/env node` launchers need the usual runtime locations. */
   private async runtimeDirectories(): Promise<string[]> {
-    if (this.platform === 'win32') return [];
+    if (this.platform === 'win32')
+      return [
+        ...(await this.windowsRegistryPaths()),
+        ...windowsBinaryDirectories(this.home, this.env),
+        ...(await this.nvmBinaryDirectories()),
+      ];
     const homebrewNode: string[] = [];
     for (const optRoot of ['/opt/homebrew/opt', '/usr/local/opt']) {
       try {
@@ -613,7 +697,7 @@ export class HarnessInstallationService {
       }
     }
     return [
-      ...commonBinaryDirectories(this.home, this.platform),
+      ...commonBinaryDirectories(this.home, this.platform, this.env),
       ...(await this.nvmBinaryDirectories()),
       ...homebrewNode,
       path.join(this.home, '.local', 'share', 'fnm', 'aliases', 'default', 'bin'),
@@ -626,7 +710,21 @@ export class HarnessInstallationService {
 
   private commandEnvironment(candidate: string, runtimeDirectories: string[]): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = { ...this.env, HOME: this.home, USERPROFILE: this.home };
-    if (this.platform === 'win32') return env;
+    if (this.platform === 'win32') {
+      for (const key of Object.keys(env)) if (key.toLowerCase() === 'path') delete env[key];
+      const inherited = windowsPathEntries(windowsEnv(this.env, 'PATH') || '', this.env);
+      const directories = [...inherited, path.dirname(candidate), ...runtimeDirectories];
+      const seen = new Set<string>();
+      env.PATH = directories
+        .filter((directory) => {
+          const key = directory.toLowerCase();
+          if (!directory || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .join(';');
+      return env;
+    }
     const inherited = (this.env.PATH ?? '').split(path.delimiter).filter(Boolean);
     env.PATH = [...new Set([...inherited, path.dirname(candidate), ...runtimeDirectories])].join(path.delimiter);
     return env;

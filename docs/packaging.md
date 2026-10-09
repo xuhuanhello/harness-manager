@@ -14,8 +14,8 @@ npm run dist:mac
 此命令先做 TypeScript 检查和前后端构建，再使用锁定的 electron-builder 26.15.3 生成：
 
 - `release/mac-arm64/Harness Manager.app`
-- `release/harness-manager-0.1.2-mac-arm64.dmg`
-- `release/harness-manager-0.1.2-mac-arm64.zip`
+- `release/harness-manager-0.1.3-mac-arm64.dmg`
+- `release/harness-manager-0.1.3-mac-arm64.zip`
 
 文件名中的版本来自 `package.json`。首次打包需要联网下载 Electron 和镜像工具。产物、blockmap 和诊断文件位于 Git 忽略的 `release/`，不会随源码推送。命令明确使用 `--publish never`，不会创建 GitHub Release 或上传安装包。
 
@@ -34,8 +34,8 @@ npm run dist:win
 首次检出可先执行 `git clone https://github.com/xuhuanhello/harness-manager.git`，再 `cd harness-manager`。打包命令生成：
 
 - `release/win-unpacked/Harness Manager.exe`：解包后的应用，可直接启动；移动时需要保留整个 `win-unpacked` 目录。
-- `release/harness-manager-0.1.2-win-x64-setup.exe`：NSIS 安装程序，可选择安装目录。
-- `release/harness-manager-0.1.2-win-x64-portable.exe`：无需安装的便携启动包。
+- `release/harness-manager-0.1.3-win-x64-setup.exe`：NSIS 安装程序，可选择安装目录。
+- `release/harness-manager-0.1.3-win-x64-portable.exe`：无需安装的便携启动包。
 
 两个 EXE 使用不同文件名，避免覆盖。Windows 图标由 electron-builder 从 `assets/icons/harness-manager-1024.png` 转换。命令明确使用 `--publish never`；产物留在 Git 忽略的 `release/`。首次打包需要联网下载 Windows Electron、NSIS 等构建工具。
 
@@ -79,7 +79,7 @@ npm run smoke:packaged
 npm run smoke:packaged -- '/Volumes/Harness Manager/Harness Manager.app'
 ```
 
-请以实际挂载路径为准。镜像可通过 `hdiutil verify 'release/harness-manager-0.1.2-mac-arm64.dmg'` 校验。DMG 中提供应用和 Applications 快捷入口；手动安装时将应用拖入 Applications。
+请以实际挂载路径为准。镜像可通过 `hdiutil verify 'release/harness-manager-0.1.3-mac-arm64.dmg'` 校验。DMG 中提供应用和 Applications 快捷入口；手动安装时将应用拖入 Applications。
 
 开发版和安装版默认都使用 `~/Library/Application Support/harness-manager`，库位于其 `library` 子目录。`HARNESS_PROFILE_ROOT` 和 `HARNESS_LIBRARY_ROOT` 可以隔离测试目录；不要让验收用例指向日常使用的数据。
 
@@ -102,11 +102,11 @@ npm run smoke:packaged -- '/Volumes/Harness Manager/Harness Manager.app'
 
 ## GitHub Releases
 
-`.github/workflows/release.yml` 在版本 tag 推送时运行。先更新 `package.json`、锁文件和第三方许可声明，提交通过检查的源码，再推送完全匹配版本号的 tag。例如当前 `0.1.2` 的首次发布：
+`.github/workflows/release.yml` 在版本 tag 推送时运行。先更新 `package.json`、锁文件和第三方许可声明，提交通过检查的源码，再推送完全匹配版本号的 tag。例如当前 `0.1.3` 的首次发布：
 
 ```sh
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.1.3
+git push origin v0.1.3
 ```
 
 Actions 使用 Windows x64 和 macOS Apple Silicon 原生运行器构建，检查版本号、代码规范，并在 macOS 执行服务与桌面回归测试。两边都必须通过打包后应用的 smoke，发布任务才会继续。安装程序的人工安装、升级、具体 Harness 扫描及跨机器体验仍需独立验收。

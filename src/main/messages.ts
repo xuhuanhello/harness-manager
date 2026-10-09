@@ -454,6 +454,9 @@ const MESSAGES = {
   LOCATION_SKILL_NOT_FOUND: () => '该技能不存在或已移除，请刷新列表。',
 
   // Installation detection and cleanup
+  INSTALLATION_COMMAND_TIMEOUT: () => '版本检测命令运行超时。',
+  INSTALLATION_COMMAND_OUTPUT_LIMIT: () => '版本检测命令的输出超过限制。',
+  INSTALLATION_COMMAND_FAILED: () => '版本检测命令运行失败。',
   INSTALLATION_HARNESS_NOT_FOUND: () => 'Harness 不存在。',
   INSTALLATION_REVEAL_DISABLED: () => '此 Harness 已禁用；启用后才能检查其目录。',
   INSTALLATION_REVEAL_UNKNOWN_PATH: () => '此路径不在已检测的技能目录中。',

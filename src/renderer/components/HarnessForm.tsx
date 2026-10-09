@@ -173,7 +173,7 @@ export default function HarnessForm({
             </label>
           )}
           <p className="field-help">
-            保存后可检测安装：先在 PATH 查找版本命令，再检查指定路径和常见安装位置。检测只运行可执行文件及版本参数，不经过 shell。
+            保存后可检测安装：查找 PATH、指定路径和常见安装位置，再运行版本命令。Windows 同时支持原生 EXE 和 CLI 启动脚本。
           </p>
         </>
       )}

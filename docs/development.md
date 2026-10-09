@@ -38,6 +38,18 @@ npm run dev
 
 Windows 默认数据根目录是 `%APPDATA%\harness-manager\library`。PowerShell 的隔离环境变量与 EXE 打包步骤见[打包指南](packaging.md#windows-构建)。
 
+## Windows 安装检测
+
+CLI 检测先使用进程继承的 PATH，再补读 Windows 用户与系统 PATH；原生安装和常见包管理器目录作为兜底。包括 Claude 的 `~/.local/bin` / `%LOCALAPPDATA%\Programs\claude`、Codex standalone 的 `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin`、npm、pnpm、Volta、nvm-windows、Scoop、Bun 和 Cargo 等入口。配置目录或技能文件存在不代表 CLI 已安装。
+
+原生 EXE 直接运行版本参数；`.cmd` / `.bat` 启动器使用 cross-spawn 处理 Windows 参数引用，并限制时间、输出和子进程存活。读取系统 PATH 的 PowerShell 查询不加载用户 profile，不执行安装脚本。Windows Store 应用执行别名不会被被动检测启动；只能找到别名时返回“无法确认”，保护相关技能目录。
+
+Claude、Codex、Gemini、Kimi、Cursor CLI、OpenCode、Copilot CLI、Amp、Goose、Pi、Grok 和 Antigravity CLI 共用该逻辑。只装在 WSL 里的 CLI 不会被当成本机安装。编辑器插件仍按扩展清单验证；只配置 macOS `.app` 路径的桌面 Harness，在 Windows 仍返回“无法确认”，不能据此判定未安装。
+
+修改安装或 PATH 后，在设置中重新检测；默认结果缓存五分钟。可通过 Harness 的“可执行文件路径”指定自定义安装位置。Windows 专项回归：`npx vitest run tests/windows-cli-installation.test.ts`，其中真实 EXE、启动器和进程终止用例只在 Windows 执行，Release CI 会运行全部这些用例。
+
+实现参考：[CC Switch 的 Windows PATH 与 CLI 探测](https://github.com/farion1231/cc-switch/blob/c261126630b3416e67b407da018cc614bbbe84cd/src-tauri/src/commands/misc.rs#L1970)、[Node.js 的 Windows 启动脚本说明](https://nodejs.org/docs/latest-v24.x/api/child_process.html#spawning-bat-and-cmd-files-on-windows)。
+
 ## 代码阅读顺序
 
 建议按数据边界从外向内阅读：
