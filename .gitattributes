@@ -1,0 +1,4 @@
+# Keep source formatting consistent on Windows, macOS, and Linux.
+* text=auto eol=lf
+*.png -text
+*.icns -text
