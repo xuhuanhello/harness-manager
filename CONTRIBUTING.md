@@ -28,7 +28,7 @@
    # 完成修改与验证后
    git add <changed-files>
    git commit -m "Describe the change"
-   git push -u origin feat/your-change
+   git push -u origin codex/your-change
    ```
 
    已有本地仓库时，先同步 `main` 再创建分支；以上命令仅示意流程。PR 使用仓库模板，说明用户可见行为、设计选择、验证结果和未验证的平台。等待 CI 和维护者复核，按反馈修改；合并后删除主题分支。CI 在 macOS 上执行 lint、构建、服务测试和 Electron 端到端测试。

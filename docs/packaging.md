@@ -90,27 +90,38 @@ npm run smoke:packaged -- '/Volumes/Harness Manager/Harness Manager.app'
 - 启动打包后的 `.app`，通过上述端到端 smoke 验证。
 - 校验 DMG 校验和、只读挂载，并启动镜像中的应用执行相同验证。
 
-这不代表已验证其它 Mac、Gatekeeper 下载隔离场景或系统版本组合。正式发布仍需独立机器安装、升级及退出流程验收。
+这不代表已验证其它 Mac、Gatekeeper 下载隔离场景或系统版本组合。正式稳定发布仍需独立机器安装、升级及退出流程验收。
 
 ## macOS 签名与正式发布
 
-当前配置明确关闭代码签名、公证及 Hardened Runtime，是开发测试包，不是可公开分发的正式发布包。没有把任何 Apple 证书或凭据写入仓库。
+当前配置明确关闭代码签名、公证及 Hardened Runtime。GitHub Releases 中的早期版本会标明未签名测试包，并以 Pre-release 发布。没有把任何 Apple 证书或凭据写入仓库。
 
-准备正式发布时，需要开发者提供 Apple Developer 的 Developer ID Application 身份及公证凭据，使用受保护的构建环境/仓库 Secrets；启用 Hardened Runtime、审核所需 entitlements，签名后公证并 staple，最后在另一台 Mac 验证正常安装。完成这些步骤后再创建正式 Release。不要通过关闭系统安全机制来替代签名验收。
+准备正式稳定发布时，需要开发者提供 Apple Developer 的 Developer ID Application 身份及公证凭据，使用受保护的构建环境/仓库 Secrets；启用 Hardened Runtime、审核所需 entitlements，签名后公证并 staple，最后在另一台 Mac 验证正常安装。完成这些步骤后再创建正式稳定 Release。不要通过关闭系统安全机制来替代签名验收。
 
 配置参考：[electron-builder macOS 文档](https://www.electron.build/mac.html)。该网站可能展示下一主版本的配置；本项目固定在 26.x，应以锁定版本的 schema 和类型为准，升级时重新核对签名字段。
 
 ## GitHub Releases
 
-私有仓库同样支持 Releases，访问范围随仓库可见性变化。`dist:mac` 和 `dist:win` 只生成本地文件，不会自动创建版本、上传附件或发布 Release。
+`.github/workflows/release.yml` 在版本 tag 推送时运行。先更新 `package.json`、锁文件和第三方许可声明，提交通过检查的源码，再推送完全匹配版本号的 tag。例如当前 `0.1.0` 的首次发布：
 
-发布前应在对应操作系统完成打包后的 smoke、安装、启动、退出与重启验收。使用与版本号对应的 tag，在 GitHub Releases 中先建立草稿并上传经过验证的附件：
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
 
-- macOS：DMG 和 ZIP。
-- Windows：`setup.exe` 和 `portable.exe`。
-- 可选：上述安装包的 SHA-256 校验文件。
+Actions 使用 Windows x64 和 macOS Apple Silicon 原生运行器构建，检查版本号、代码规范，并在 macOS 执行服务与桌面回归测试。两边都必须通过打包后应用的 smoke，发布任务才会继续。安装程序的人工安装、升级、具体 Harness 扫描及跨机器体验仍需独立验收。
 
-发布说明应列出适用架构、签名状态、已测试的平台和已知限制。确认 tag 对应源码、版本与附件一致后，再发布草稿。未验收的平台不应宣称已支持稳定运行。
+发布任务只接收四个预期安装包，校验完整文件清单并生成 `SHA256SUMS.txt`，随后上传草稿并发布：
+
+- macOS arm64：DMG 和 ZIP。
+- Windows x64：`setup.exe` 和 `portable.exe`。
+- 四个文件的 SHA-256 校验文件。
+
+`0.x` 与带预发布后缀的版本标记为 Pre-release，说明中列出未签名、未公证等限制。当前工作流不构建 Intel Mac 或 Linux 安装包。
+
+也可在 Actions 的 Release 页面手动运行，输入已经存在且匹配 `package.json` 的 tag；工作流始终检出该 tag 的源码。已发布的 Release 不会被覆盖。失败后若留下未发布草稿，应检查并删除该草稿后重试；修改源码时使用新的版本和 tag。
+
+`dist:mac` 和 `dist:win` 仍只生成本地文件，明确使用 `--publish never`，不会创建 Release。公开附件应始终从通过检查的工作流发布。
 
 验收截图、Playwright traces 和构建日志作为 GitHub Actions artifacts 保存；内部调研、个人 profile、技能库、证书、调试输出和 `win-unpacked` 等临时目录不作为公开 Release 附件。
 

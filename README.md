@@ -13,6 +13,8 @@ Harness Manager 是一个本地优先的桌面应用，用来整理 Agent 技能
 
 当前测试包未签名。Windows 便携版默认仍将资料库保存在 `%APPDATA%\harness-manager`，与安装版共用数据位置。自建安装包与隔离测试方法见[打包指南](docs/packaging.md)。
 
+维护者推送与 `package.json` 版本一致的 `v*` tag 后，GitHub Actions 会在 Windows 和 macOS 原生运行器上构建、验证并发布安装包及 SHA-256 校验文件。`0.x` 与带预发布后缀的版本标记为 Pre-release。
+
 ## 功能
 
 - 从 GitHub 仓库、仓库子目录或本地目录扫描 `SKILL.md`，由用户选择技能后导入中央库。

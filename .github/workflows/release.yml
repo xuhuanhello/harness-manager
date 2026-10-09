@@ -1,0 +1,116 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag, matching package.json (for example v0.1.0)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: windows-latest
+            command: npm run dist:win
+          - platform: macos-arm64
+            runner: macos-15
+            command: npm run dist:mac
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Verify version tag
+        run: node scripts/release.mjs metadata
+      - run: npm ci
+      - run: npm run lint
+      - name: Service regression tests
+        if: matrix.platform == 'macos-arm64'
+        run: npm test
+      - name: Build installers
+        run: ${{ matrix.command }}
+      - name: Desktop regression tests
+        if: matrix.platform == 'macos-arm64'
+        run: npm run test:e2e
+      - name: Verify packaged application
+        run: npm run smoke:packaged
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installers-${{ matrix.platform }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*-setup.exe
+            release/*-portable.exe
+          archive: true
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve failed desktop traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-test-results-${{ matrix.platform }}
+          path: test-results/
+          archive: true
+          retention-days: 7
+  publish:
+    name: Publish verified installers
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - id: metadata
+        name: Verify version tag
+        run: node scripts/release.mjs metadata
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: installers-*
+          merge-multiple: true
+          path: release-assets
+      - name: Verify inventory and generate checksums
+        run: node scripts/release.mjs prepare release-assets
+      - name: Upload and publish Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRERELEASE: ${{ steps.metadata.outputs.prerelease }}
+        shell: bash
+        run: |
+          release_flags=()
+          if [ "$PRERELEASE" = "true" ]; then
+            release_flags+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" \
+            release-assets/*.dmg release-assets/*.zip release-assets/*.exe release-assets/SHA256SUMS.txt \
+            --verify-tag --draft --title "Harness Manager $RELEASE_TAG" \
+            --notes-file release-assets/RELEASE_NOTES.md "${release_flags[@]}"
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$PRERELEASE"

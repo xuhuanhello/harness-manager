@@ -7,7 +7,7 @@ import { _electron as electron } from '@playwright/test';
 const defaultApp = process.platform === 'win32' ? 'release/win-unpacked/Harness Manager.exe' : 'release/mac-arm64/Harness Manager.app';
 const appPath = path.resolve(process.argv[2] || defaultApp);
 const executablePath = appPath.endsWith('.app') ? path.join(appPath, 'Contents/MacOS/Harness Manager') : appPath;
-const root = await mkdtemp(path.join(os.tmpdir(), 'harness-packaged-smoke-'));
+const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'harness-packaged-smoke-')));
 let application;
 try {
   const source = path.join(root, 'source');
