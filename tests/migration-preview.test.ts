@@ -1,0 +1,42 @@
+import { afterEach, it, expect } from 'vitest';
+import { mkdtemp, mkdir, writeFile, rm, symlink, lstat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { createServices } from '../src/main/services';
+import { Store } from '../src/main/store';
+const cleanup: Array<() => Promise<void>> = [];
+afterEach(async () => {
+  for (const fn of cleanup.reverse()) await fn();
+  cleanup.length = 0;
+});
+
+it('requires a new preview when source content or configured reference set changes', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hm-preview-'));
+  const store = new Store(path.join(root, 'library'));
+  cleanup.push(() => rm(root, { recursive: true, force: true }));
+  cleanup.push(async () => store.close());
+  const { harnesses, external: scanner, migration } = createServices(store, { home: path.join(root, 'home') });
+  const source = path.join(root, 'original', 'research');
+  const target = path.join(root, 'a');
+  const second = path.join(root, 'b');
+  await mkdir(source, { recursive: true });
+  await mkdir(target);
+  await mkdir(second);
+  await writeFile(path.join(source, 'SKILL.md'), '---\nname: research\ndescription: Test skill\n---\n');
+  await symlink(source, path.join(target, 'research'));
+  harnesses.saveHarness({ name: 'A', userSkillsPath: target, workspaceSkillsRelativePath: '' });
+  const external = (await scanner.externalSkills())[0];
+  const preview = await migration.preview({ externalSkillId: external.id });
+  expect(preview.references).toHaveLength(1);
+  await writeFile(path.join(source, 'notes.txt'), 'new content');
+  await expect(migration.migrate({ externalSkillId: external.id, previewId: preview.previewId })).rejects.toThrow(/变化/);
+  expect(store.list('skills')).toHaveLength(0);
+  const refreshed = await migration.preview({ externalSkillId: external.id });
+  await symlink(source, path.join(second, 'research'));
+  harnesses.saveHarness({ name: 'B', userSkillsPath: second, workspaceSkillsRelativePath: '' });
+  await expect(migration.migrate({ externalSkillId: external.id, previewId: refreshed.previewId })).rejects.toThrow(/变化/);
+  expect(store.list('skills')).toHaveLength(0);
+  expect((await lstat(source)).isDirectory()).toBe(true);
+  const complete = await migration.preview({ externalSkillId: external.id });
+  expect(complete.references).toHaveLength(2);
+});

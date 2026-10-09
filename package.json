@@ -1,0 +1,93 @@
+{
+  "name": "harness-manager",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first skill library and Harness workspace manager",
+  "type": "module",
+  "main": "dist/main/index.cjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:renderer": "vite --host 127.0.0.1",
+    "build": "npm run typecheck && npm run notices && vite build && node scripts/build-main.mjs",
+    "notices": "node scripts/third-party-notices.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "start": "electron .",
+    "test:e2e": "playwright test",
+    "smoke:github": "esbuild scripts/smoke-github.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/smoke-github.cjs && node dist/smoke-github.cjs",
+    "dist:mac": "npm run build && electron-builder --mac dmg zip --arm64 --publish never",
+    "dist:win": "npm run build && electron-builder --win nsis portable --x64 --publish never",
+    "smoke:packaged": "node scripts/smoke-packaged.mjs",
+    "bench": "esbuild scripts/bench-apply.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/bench-apply.cjs && node dist/bench-apply.cjs"
+  },
+  "dependencies": {
+    "js-yaml": "5.4.3",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "electron": "^44.0.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0",
+    "vite": "^6.4.0",
+    "vitest": "^5.0.3"
+  },
+  "productName": "Harness Manager",
+  "license": "MIT",
+  "build": {
+    "appId": "io.github.xuhuanhello.harness-manager",
+    "productName": "Harness Manager",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md",
+      "!dist/**/*.map",
+      "!node_modules/**"
+    ],
+    "npmRebuild": false,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "hardenedRuntime": false,
+      "notarize": false,
+      "icon": "assets/icons/harness-manager.icns"
+    },
+    "win": {
+      "icon": "assets/icons/harness-manager-1024.png",
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-${version}-win-${arch}-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
+  },
+  "author": "xuhuanhello",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xuhuanhello/harness-manager.git"
+  }
+}

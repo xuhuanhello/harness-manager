@@ -1,0 +1,43 @@
+node_modules/
+dist/
+.DS_Store
+playwright-report/
+test-results/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+
+.firecrawl/
+.local/
+
+# Internal planning, local acceptance captures, and source artwork
+artifacts/
+reports/
+docs/acceptance.md
+docs/implementation-contract.md
+assets/icons/harness-manager-master.png
+
+# Local installers and build diagnostics
+release/
+*.dmg
+*.zip
+*.exe
+*.msi
+*.msix
+*.appx
+*.AppImage
+*.deb
+*.rpm
+*.blockmap
+
+# Local app data and signing credentials
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.pem
+*.key
+*.pfx
+*.p12
