@@ -15,7 +15,7 @@ if (process.argv[2] === 'metadata') {
   else process.stdout.write(metadata);
 } else if (process.argv[2] === 'prepare' && process.argv[3]) {
   const directory = path.resolve(process.argv[3]);
-  const prefix = `${pkg.productName}-${pkg.version}`;
+  const prefix = `${pkg.name}-${pkg.version}`;
   const expected = [
     `${prefix}-mac-arm64.dmg`,
     `${prefix}-mac-arm64.zip`,

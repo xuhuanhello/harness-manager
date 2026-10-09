@@ -1,6 +1,6 @@
 {
   "name": "harness-manager",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Local-first skill library and Harness workspace manager",
   "type": "module",
@@ -78,12 +78,12 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "${productName}-${version}-win-${arch}-setup.${ext}"
+      "artifactName": "harness-manager-${version}-win-${arch}-setup.${ext}"
     },
     "portable": {
-      "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
+      "artifactName": "harness-manager-${version}-win-${arch}-portable.${ext}"
     },
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
+    "artifactName": "harness-manager-${version}-${os}-${arch}.${ext}"
   },
   "author": "xuhuanhello",
   "repository": {

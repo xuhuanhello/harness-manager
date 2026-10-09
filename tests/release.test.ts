@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 const exec = promisify(execFile);
 const script = fileURLToPath(new URL('../scripts/release.mjs', import.meta.url));
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-const prefix = `${pkg.productName}-${pkg.version}`;
+const prefix = `${pkg.name}-${pkg.version}`;
 const names = [`${prefix}-mac-arm64.dmg`, `${prefix}-mac-arm64.zip`, `${prefix}-win-x64-portable.exe`, `${prefix}-win-x64-setup.exe`];
 const roots: string[] = [];
 async function fixture() {
