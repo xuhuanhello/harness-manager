@@ -93,7 +93,9 @@ export function AppUpdateSettings({
           {t('appUpdate.check')}
         </button>
       </div>
-      <p role="status">{status}</p>
+      <p className="app-update-status" role="status">
+        {status}
+      </p>
       <p className="settings-footnote">
         {t('appUpdate.lastChecked', {
           time: state.lastCheckedAt
@@ -101,13 +103,17 @@ export function AppUpdateSettings({
             : t('appUpdate.neverChecked'),
         })}
       </p>
-      {state.status === 'error' && <p role="alert">{state.message}</p>}
+      {state.status === 'error' && (
+        <p className="app-update-status error" role="alert">
+          {state.message}
+        </p>
+      )}
       {state.status === 'error' && state.permissionRequired && (
         <button className="button subtle" onClick={update.openManagement}>
           {t('appUpdate.openManagement')}
         </button>
       )}
-      {state.status === 'unsupported' && <p>{state.reason}</p>}
+      {state.status === 'unsupported' && <p className="app-update-status">{state.reason}</p>}
       <div className="app-update-settings-actions">
         <label>
           <input
@@ -164,8 +170,16 @@ export function AppUpdateDialog({ update }: { update: AppUpdateController }) {
             </>
           )
         )}
-        {state.status === 'unsupported' && <p role="status">{state.reason}</p>}
-        {state.status === 'error' && <p role="alert">{state.message}</p>}
+        {state.status === 'unsupported' && (
+          <p className="app-update-status" role="status">
+            {state.reason}
+          </p>
+        )}
+        {state.status === 'error' && (
+          <p className="app-update-status error" role="alert">
+            {state.message}
+          </p>
+        )}
         {downloading && (
           <div>
             <progress
