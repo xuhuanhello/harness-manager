@@ -67,7 +67,7 @@
     "npmRebuild": false,
     "mac": {
       "category": "public.app-category.developer-tools",
-      "identity": null,
+      "identity": "-",
       "hardenedRuntime": false,
       "notarize": false,
       "icon": "assets/icons/harness-manager.icns"

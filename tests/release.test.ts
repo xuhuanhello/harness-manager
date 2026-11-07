@@ -61,6 +61,8 @@ describe('release publication boundary', () => {
       return `${hash}  ${name}`;
     });
     expect(await readFile(path.join(root, 'SHA256SUMS.txt'), 'utf8')).toBe(`${expected.join('\n')}\n`);
-    expect(await readFile(path.join(root, 'RELEASE_NOTES.md'), 'utf8')).toContain('未签名测试包');
+    const notes = await readFile(path.join(root, 'RELEASE_NOTES.md'), 'utf8');
+    expect(notes).toContain('ad-hoc 签名、未公证');
+    expect(notes).toContain('仍要打开');
   });
 });

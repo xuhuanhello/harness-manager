@@ -94,7 +94,9 @@ npm run smoke:packaged -- '/Volumes/Harness Manager/Harness Manager.app'
 
 ## macOS 签名与正式发布
 
-当前配置明确关闭代码签名、公证及 Hardened Runtime。GitHub Releases 中的早期版本会标明未签名测试包，并以 Pre-release 发布。没有把任何 Apple 证书或凭据写入仓库。
+当前配置使用 ad-hoc 临时签名（`mac.identity: "-"`），不使用 Developer ID，也不做公证和 Hardened Runtime。GitHub Releases 中的早期版本会标明未公证测试包，并以 Pre-release 发布。没有把任何 Apple 证书或凭据写入仓库。
+
+必须保留 ad-hoc 签名，不能改回 `identity: null`。`null` 会跳过签名，主程序只剩 Electron 原始的链接器签名，没有资源清单。打包修改 Info.plist 和资源后，这个签名对整个应用已经无效（`codesign --verify` 报 “code has no resources but signature indicates they must be present”）。浏览器下载、带隔离标记的应用会因此被 Gatekeeper 判为“已损坏”，系统不提供任何打开入口。有效的 ad-hoc 签名只会被判为“未经公证”：第一次打开被拦截后，可以在“系统设置 → 隐私与安全性”中点“仍要打开”。可以用 `codesign --verify --deep --strict -vv` 和 `syspolicy_check distribution` 检查打包结果。
 
 准备正式稳定发布时，需要开发者提供 Apple Developer 的 Developer ID Application 身份及公证凭据，使用受保护的构建环境/仓库 Secrets；启用 Hardened Runtime、审核所需 entitlements，签名后公证并 staple，最后在另一台 Mac 验证正常安装。完成这些步骤后再创建正式稳定 Release。不要通过关闭系统安全机制来替代签名验收。
 
