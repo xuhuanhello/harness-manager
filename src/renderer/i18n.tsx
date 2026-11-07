@@ -47,6 +47,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 }
 const SystemLocaleContext = createContext<(locale: Locale) => void>(() => {});
 export const useLocalePreference = () => useContext(PreferenceContext);
+export const useLocale = () => useContext(I18nContext);
 export const useSystemLocale = () => useContext(SystemLocaleContext);
 export function useT() {
   const locale = useContext(I18nContext);
