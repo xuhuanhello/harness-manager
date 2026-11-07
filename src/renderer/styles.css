@@ -275,7 +275,28 @@ button:disabled {
 }
 .app-update-dialog {
   display: grid;
-  gap: 14px;
+  gap: 8px;
+  color: #6b7889;
+  font-size: 9px;
+}
+.app-update-dialog h3 {
+  color: #3b4759;
+  font-size: 12px;
+  font-weight: 630;
+}
+.app-update-dialog h4 {
+  margin-top: 6px !important;
+  color: #3b4759;
+  font-size: 10px;
+  font-weight: 620;
+}
+.app-update-status {
+  margin: 8px 0 0;
+  color: #5d6b7d;
+  font-size: 9px;
+}
+.app-update-status.error {
+  color: #b5524b;
 }
 .app-update-dialog p,
 .app-update-dialog h3,
@@ -283,6 +304,15 @@ button:disabled {
   margin: 0;
 }
 .app-release-notes {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid #e6e9ee;
+  border-radius: 7px;
+  background: #f8f9fb;
+  color: #5d6b7d;
+  font-family: inherit;
+  font-size: 8.5px;
+  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-height: 240px;
@@ -301,8 +331,16 @@ button:disabled {
 }
 .app-update-settings-actions label {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
+  color: #4f5d70;
+  font-size: 9px;
+}
+.app-update-settings-actions input[type='checkbox'] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  accent-color: #5b6cf0;
 }
 
 .main-panel {
