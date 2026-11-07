@@ -11,7 +11,7 @@ Harness Manager 是一个本地优先的桌面应用，用来整理 Agent 技能
 - macOS Apple Silicon：DMG 安装包或 ZIP 中的应用。
 - Windows x64：`setup.exe` 安装版或 `portable.exe` 便携版。
 
-当前测试包未签名。Windows 便携版默认仍将资料库保存在 `%APPDATA%\harness-manager`，与安装版共用数据位置。自建安装包与隔离测试方法见[打包指南](docs/packaging.md)。
+当前测试包未经公证：macOS 仅做 ad-hoc 签名，第一次打开若被拦截，请到“系统设置 → 隐私与安全性”点“仍要打开”；Windows 安装包未签名。Windows 便携版默认仍将资料库保存在 `%APPDATA%\harness-manager`，与安装版共用数据位置。自建安装包与隔离测试方法见[打包指南](docs/packaging.md)。
 
 维护者推送与 `package.json` 版本一致的 `v*` tag 后，GitHub Actions 会在 Windows 和 macOS 原生运行器上构建、验证并发布安装包及 SHA-256 校验文件。`0.x` 与带预发布后缀的版本标记为 Pre-release。
 

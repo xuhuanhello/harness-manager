@@ -44,7 +44,7 @@ if (process.argv[2] === 'metadata') {
       '- macOS Apple Silicon（arm64）：DMG 安装包、ZIP 应用包。\n' +
       '- SHA256SUMS.txt：四个安装文件的 SHA-256 校验值。\n\n' +
       '本次附件由 GitHub Actions 在对应平台构建，并通过打包后应用的自动 smoke 检查。\n' +
-      '当前为未签名测试包，macOS 未公证；人工安装、升级及具体 Harness 的实机发现仍需验收。\n' +
+      '当前为测试包：macOS 仅 ad-hoc 签名、未公证，首次打开若被拦截，请在“系统设置 → 隐私与安全性”中点“仍要打开”；Windows 未签名。具体 Harness 的实机发现仍需验收。\n' +
       'Windows 便携版默认仍使用 %APPDATA%\\harness-manager 保存数据。\n\n' +
       '源码采用 MIT 许可证；第三方许可声明随应用分发。\n',
   );
