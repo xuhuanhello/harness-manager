@@ -6,7 +6,7 @@
 
 默认启用 `settings.appUpdates.autoCheck`。启动约 15 秒后检查一次，此后每 6 小时检查；设置页可关闭自动检查，手动“检查应用更新”始终可用。旧设置没有此字段时按启用处理。安装结果需要处理 App 管理权限时，自动检查不会覆盖该提示，用户可手动重试。
 
-请求由主进程使用 Electron `net.fetch` 发出，使用系统代理。请求地址为 `https://api.github.com/repos/xuhuanhello/harness-manager/releases?per_page=30`，请求头只有应用版本和 GitHub API 格式信息，不加入个人信息。忽略 draft；0.x 或预发布客户端允许 Pre-release，稳定客户端只选择稳定版本。按 SemVer（含预发布段）选择高于当前版本的最高版本。
+请求由主进程使用 Electron `net.request`（见 `src/main/manual-redirect-fetch.ts`）发出，使用系统代理，不携带 Cookie。每次跳转都先返回给更新器校验地址（GitHub 附件会从 `github.com` 跳转到 `release-assets.githubusercontent.com`），校验通过才请求下一跳。不使用 `net.fetch`，因为它遇到 `redirect: 'manual'` 会直接报 “Redirect was cancelled”。请求地址为 `https://api.github.com/repos/xuhuanhello/harness-manager/releases?per_page=30`，请求头只有应用版本和 GitHub API 格式信息，不加入个人信息。忽略 draft；0.x 或预发布客户端允许 Pre-release，稳定客户端只选择稳定版本。按 SemVer（含预发布段）选择高于当前版本的最高版本。
 
 左下角显示新版本、下载进度、失败重试或“重启以更新”。确认框显示当前版本、目标版本、发布时间、附件大小和纯文本发布说明。关闭确认框不会中断下载；“取消下载”中止请求并删除不完整文件。下载完成后仍需再次确认重启，才会执行安装。
 

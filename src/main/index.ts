@@ -1,5 +1,5 @@
 import { t } from '../shared/i18n';
-import { app, BrowserWindow, dialog, ipcMain, net, powerMonitor, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell } from 'electron';
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -10,6 +10,7 @@ import { resolveLocale, setLocaleResolver } from '../shared/i18n';
 import type { Settings } from '../shared/types';
 import { appError } from './messages';
 import { AppUpdater } from './app-updater';
+import { manualRedirectFetch } from './manual-redirect-fetch';
 import { installMacUpdate, macLocationReason, spawnDetached } from './app-update-install';
 import { writeFile } from 'node:fs/promises';
 let controller: Controller | undefined;
@@ -53,7 +54,7 @@ else {
         isPackaged: app.isPackaged,
         userData: app.getPath('userData'),
         env: process.env,
-        fetch: (url, init) => net.fetch(url instanceof URL ? url.href : url, init),
+        fetch: manualRedirectFetch,
         locationReason: () => macLocationReason(process.execPath),
         install: async (file, version) => {
           await writeFile(path.join(app.getPath('userData'), 'updates', 'pending-version'), version, { mode: 0o600 });
