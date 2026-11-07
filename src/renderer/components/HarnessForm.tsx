@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { Check, LoaderCircle, ShieldCheck } from 'lucide-react';
 import type { HarnessInput } from '../../shared/types';
 const lines = (value: string) =>
@@ -22,6 +23,7 @@ export default function HarnessForm({
   saving: boolean;
   error: string;
 }) {
+  const t = useT();
   const invalid =
     !value.name.trim() ||
     (!value.userSkillsPath.trim() &&
@@ -34,12 +36,12 @@ export default function HarnessForm({
       {builtin && (
         <div className="form-help-box">
           <ShieldCheck size={16} />
-          <span>内置目录及兼容规范由官方文档定义。可以补充本机可执行文件、桌面应用或编辑器扩展的位置。</span>
+          <span>{t('harness.builtInDirectoriesAndCompatibilityRulesFollowOfficialDocumentationYou')}</span>
         </div>
       )}
       <fieldset className="modal-fields" disabled={builtin || saving}>
         <label className="field-label">
-          名称
+          {t('harness.name')}
           <input
             autoFocus={!builtin}
             className="form-input"
@@ -48,7 +50,7 @@ export default function HarnessForm({
           />
         </label>
         <label className="field-label">
-          图标字符
+          {t('harness.iconCharacter')}
           <input
             className="form-input short-input"
             maxLength={3}
@@ -57,17 +59,17 @@ export default function HarnessForm({
           />
         </label>
         <div className="field-label">
-          工具类型
+          {t('harness.toolType')}
           <div className="scope-switch">
             {(['cli', 'desktop'] as const).map((kind) => (
               <button key={kind} type="button" className={value.kind === kind ? 'active' : ''} onClick={() => onChange({ ...value, kind })}>
-                {kind === 'cli' ? '命令行 CLI' : '桌面应用'}
+                {kind === 'cli' ? t('harness.commandLineCli') : t('harness.desktopApp')}
               </button>
             ))}
           </div>
         </div>
         <label className="field-label">
-          用户级技能目录
+          {t('harness.userSkillDirectory')}
           <input
             className="form-input"
             value={value.userSkillsPath}
@@ -76,7 +78,7 @@ export default function HarnessForm({
           />
         </label>
         <label className="field-label">
-          工作区级相对目录
+          {t('harness.workspaceRelativeDirectory')}
           <input
             className="form-input"
             value={value.workspaceSkillsRelativePath}
@@ -91,7 +93,7 @@ export default function HarnessForm({
               checked={!!value.readsUserAgents}
               onChange={(e) => onChange({ ...value, readsUserAgents: e.target.checked })}
             />
-            识别用户级 ~/.agents/skills
+            {t('harness.readUserAgentsSkills')}
           </label>
           <label>
             <input
@@ -99,38 +101,38 @@ export default function HarnessForm({
               checked={!!value.readsWorkspaceAgents}
               onChange={(e) => onChange({ ...value, readsWorkspaceAgents: e.target.checked })}
             />
-            识别工作区 .agents/skills
+            {t('harness.readWorkspaceAgentsSkills')}
           </label>
         </div>
         <label className="field-label">
-          额外识别的用户级技能目录
+          {t('harness.additionalUserSkillDirectories')}
           <textarea
             className="form-input"
             value={(value.extraUserSkillsPaths ?? []).join('\n')}
             onChange={(e) => onChange({ ...value, extraUserSkillsPaths: lines(e.target.value) })}
-            placeholder="每行一个完整目录，可留空"
+            placeholder={t('harness.oneAbsoluteDirectoryPerLineOptional')}
           />
         </label>
         <label className="field-label">
-          额外识别的工作区相对目录
+          {t('harness.additionalWorkspaceRelativeDirectories')}
           <textarea
             className="form-input"
             value={(value.extraWorkspaceSkillsRelativePaths ?? []).join('\n')}
             onChange={(e) => onChange({ ...value, extraWorkspaceSkillsRelativePaths: lines(e.target.value) })}
-            placeholder="每行一个相对目录，可留空"
+            placeholder={t('harness.oneRelativeDirectoryPerLineOptional')}
           />
         </label>
         <label className="field-label">
-          检测命令
+          {t('harness.detectionCommand')}
           <input
             className="form-input"
             value={value.command ?? ''}
             onChange={(e) => onChange({ ...value, command: e.target.value })}
-            placeholder="例如 claude（只填可执行文件名，不填整条命令）"
+            placeholder={t('harness.eGClaudeExecutableNameOnlyNotAFullCommand')}
           />
         </label>
         <label className="field-label">
-          版本参数
+          {t('harness.versionArguments')}
           <input
             className="form-input"
             value={(value.versionArgs ?? ['--version']).join(' ')}
@@ -143,27 +145,27 @@ export default function HarnessForm({
         <>
           {!!value.extensionIds?.length && (
             <label className="field-label">
-              编辑器扩展安装目录
+              {t('harness.editorExtensionDirectories')}
               <textarea
                 className="form-input"
                 value={(value.extensionRoots ?? []).join('\n')}
                 onChange={(e) => onChange({ ...value, extensionRoots: lines(e.target.value) })}
-                placeholder="每行一个目录，例如 ~/.vscode/extensions"
+                placeholder={t('harness.oneDirectoryPerLineEGVscodeExtensions')}
               />
             </label>
           )}
           <label className="field-label">
-            可执行文件路径
+            {t('harness.executablePaths')}
             <textarea
               className="form-input"
               value={(value.executablePaths ?? []).join('\n')}
               onChange={(e) => onChange({ ...value, executablePaths: lines(e.target.value) })}
-              placeholder="每行一个绝对路径，例如 ~/.local/bin/my-agent"
+              placeholder={t('harness.oneAbsolutePathPerLineEGLocalBinMy')}
             />
           </label>
           {value.kind === 'desktop' && (
             <label className="field-label">
-              桌面应用路径
+              {t('harness.desktopAppPaths')}
               <textarea
                 className="form-input"
                 value={(value.appPaths ?? []).join('\n')}
@@ -172,9 +174,7 @@ export default function HarnessForm({
               />
             </label>
           )}
-          <p className="field-help">
-            保存后可检测安装：查找 PATH、指定路径和常见安装位置，再运行版本命令。Windows 同时支持原生 EXE 和 CLI 启动脚本。
-          </p>
+          <p className="field-help">{t('harness.afterSavingDetectionChecksPathYourPathsAndCommonInstallation')}</p>
         </>
       )}
       {error && (
@@ -184,10 +184,11 @@ export default function HarnessForm({
       )}
       <div className="dialog-footer spread">
         <button className="button subtle" onClick={onCancel}>
-          取消
+          {t('harness.cancel')}
         </button>
         <button className="button primary" disabled={(!builtin && invalid) || saving} onClick={onSave}>
-          {saving ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}保存 Harness
+          {saving ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}
+          {t('harness.saveHarness')}
         </button>
       </div>
     </>

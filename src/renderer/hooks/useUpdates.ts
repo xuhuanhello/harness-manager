@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { candidateGroup } from '../../shared/candidate-groups';
 import { errorMessage } from '../../shared/errors';
@@ -21,6 +22,7 @@ function defaultSelection(check: UpdateCheck): Set<string> {
 
 /** Upstream update checks, the transient “可更新” view with its own selection, and applying updates. */
 export function useUpdates(api: HarnessAPI | undefined, shell: Shell, data: LibraryData) {
+  const t = useT();
   const { setToast, setDialog, runTask } = shell;
   const { snapshot } = data;
   const [check, setCheck] = useState<UpdateCheck | null>(null);
@@ -76,21 +78,24 @@ export function useUpdates(api: HarnessAPI | undefined, shell: Shell, data: Libr
           const failed = next.sources.filter((source) => source.error).length;
           setToast(
             found
-              ? `发现 ${found} 个技能可更新${failed ? `；${failed} 个来源无法检查` : ''}。`
+              ? t('library.foundUpdatesForSkills', {
+                  found: found,
+                  value: failed ? t('library.sourcesCouldNotBeChecked', { failed: failed }) : '',
+                })
               : failed
-                ? `${failed} 个来源无法检查，其余技能都已是最新版本。`
-                : '所有技能都已是最新版本。',
+                ? t('library.sourcesCouldNotBeCheckedAllOtherSkillsAreUp', { failed: failed })
+                : t('library.allSkillsAreUpToDate'),
           );
         }
       } catch (cause) {
         setCheckError(errorMessage(cause));
-        if (manual) setToast(`检查更新失败：${errorMessage(cause)}`);
+        if (manual) setToast(t('library.couldNotCheckUpdates', { reason: errorMessage(cause) }));
       } finally {
         pending.current = false;
         setChecking(false);
       }
     },
-    [api, setToast],
+    [api, setToast, t],
   );
 
   /** Runs a quiet check when the library opens, unless a recent one is still fresh. */
@@ -159,7 +164,7 @@ export function useUpdates(api: HarnessAPI | undefined, shell: Shell, data: Libr
     // Nothing left to apply: go back to the library instead of showing an empty update list.
     if (result && !count) {
       setViewing(false);
-      setToast('可用的更新都已完成。');
+      setToast(t('library.allAvailableUpdatesCompleted'));
     }
   };
 

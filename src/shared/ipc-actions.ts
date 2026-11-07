@@ -6,6 +6,16 @@ export const ACTIONS = [
   'revealHarnessDirectory',
   'openSkillSource',
   'revealSkill',
+  'revealExternalSkill',
+  'revealDistribution',
+  'appInfo',
+  'appUpdateState',
+  'checkAppUpdate',
+  'downloadAppUpdate',
+  'cancelAppUpdate',
+  'installAppUpdate',
+  'openAppUpdatePage',
+  'openAppUpdateSettings',
   'snapshot',
   'migrationRepairs',
   'repairManagedLink',
@@ -39,4 +49,5 @@ export function isAction(value: unknown): value is Action {
 }
 
 export const CHANGED_CHANNEL = 'harness:changed';
+export const APP_UPDATE_CHANNEL = 'harness:app-update';
 export const INVOKE_CHANNEL = 'harness:invoke';

@@ -48,6 +48,21 @@ function seedVersionZero(store: Store): void {
 }
 
 describe('store migrations', () => {
+  it('adds the system language to legacy settings without replacing existing preferences', async () => {
+    for (const locale of [undefined, 'en'] as const) {
+      const store = open(await root());
+      store.migrate(MIGRATIONS.filter((migration) => migration.version <= 3));
+      store.put('settings', { id: 'ui', viewMode: 'group', activeTabs: { group: 'my-group' }, ...(locale ? { locale } : {}) });
+      store.migrate(MIGRATIONS);
+      expect(store.get('settings', 'ui')).toEqual({
+        id: 'ui',
+        viewMode: 'group',
+        activeTabs: { group: 'my-group' },
+        locale: locale ?? 'system',
+      });
+    }
+  });
+
   it('upgrades a version-0 library and keeps a backup of the original', async () => {
     const directory = await root();
     const store = open(directory);
@@ -55,8 +70,8 @@ describe('store migrations', () => {
     expect(store.version).toBe(0);
 
     const result = store.migrate(MIGRATIONS);
-    expect(result).toMatchObject({ from: 0, to: 3 });
-    expect(store.version).toBe(3);
+    expect(result).toMatchObject({ from: 0, to: 4 });
+    expect(store.version).toBe(4);
     const enabled = Object.fromEntries(store.list<Harness>('harnesses').map((harness) => [harness.id, harness.enabled]));
     expect(enabled).toEqual({ codex: true, 'gemini-cli': true, opencode: false, 'custom-old': true, pi: false });
     expect(store.get<{ phase: string; updatedAt: string }>('operations', 'install-1')).toMatchObject({
@@ -84,8 +99,8 @@ describe('store migrations', () => {
 
   it('does nothing on an up-to-date store and skips the backup for an empty one', async () => {
     const store = open(await root());
-    expect(store.migrate(MIGRATIONS)).toEqual({ from: 0, to: 3, backupPath: undefined });
-    expect(store.migrate(MIGRATIONS)).toEqual({ from: 3, to: 3 });
+    expect(store.migrate(MIGRATIONS)).toEqual({ from: 0, to: 4, backupPath: undefined });
+    expect(store.migrate(MIGRATIONS)).toEqual({ from: 4, to: 4 });
     expect((await readdir(store.root)).some((name) => name.includes('.bak-'))).toBe(false);
   });
 
@@ -115,7 +130,7 @@ describe('store migrations', () => {
     legacy.close();
     const app = new Controller(directory, () => {}, { watch: false });
     cleanups.push(() => app.close());
-    expect(app.store.version).toBe(3);
+    expect(app.store.version).toBe(4);
     expect(app.store.get<Harness>('harnesses', 'opencode')?.enabled).toBe(false);
     expect(app.store.get<Harness>('harnesses', 'custom-old')?.enabled).toBe(true);
   });

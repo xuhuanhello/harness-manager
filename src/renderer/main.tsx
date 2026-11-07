@@ -1,10 +1,16 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { I18nProvider } from './i18n';
+import { AppInfoProvider } from './hooks/useAppInfo';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <I18nProvider>
+      <AppInfoProvider>
+        <App />
+      </AppInfoProvider>
+    </I18nProvider>
   </React.StrictMode>,
 );

@@ -1,3 +1,5 @@
+import { formatList } from '../shared/i18n';
+import { harnessNameById } from '../shared/harness-registry';
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, readlink, realpath } from 'node:fs/promises';
 import path from 'node:path';
@@ -121,13 +123,7 @@ export class MigrationService {
     const independentDisabledReferences = disabledReferences.filter((item) => !enabledEntryPaths.has(path.resolve(item.path)));
     if (independentDisabledReferences.length) {
       const harnessNames = this.store.list<Harness>('harnesses');
-      const names = [
-        ...new Set(
-          independentDisabledReferences.map(
-            (item) => harnessNames.find((harness) => harness.id === item.harnessId)?.name || item.harnessId,
-          ),
-        ),
-      ].join(', ');
+      const names = formatList(new Set(independentDisabledReferences.map((item) => harnessNameById(harnessNames, item.harnessId))));
       throw appError('MIGRATION_PREVIEW_DISABLED_REFERENCES', { names });
     }
     for (const item of external) {
@@ -155,7 +151,7 @@ export class MigrationService {
       .map((item) => ({
         path: item.path,
         harnessId: item.harnessId,
-        harnessName: harnesses.find((harness) => harness.id === item.harnessId)?.name || item.harnessId,
+        harnessName: harnessNameById(harnesses, item.harnessId),
         scope: item.scope,
         ...(item.workspaceId
           ? { workspaceId: item.workspaceId, workspaceName: workspaces.find((workspace) => workspace.id === item.workspaceId)?.name }

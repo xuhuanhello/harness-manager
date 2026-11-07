@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { useState } from 'react';
 import type { HarnessAPI } from '../../shared/ipc-contract';
 import type { ApplyPlan, ApplyRequest, BatchResult } from '../../shared/types';
@@ -11,6 +12,7 @@ const EMPTY_DRAFT: ApplyDraft = { mode: 'harness', scope: 'user', harnessIds: []
 
 /** Applying the selected skills to Harnesses (preview, then apply) or adding them to a group. */
 export function useApplyFlow(api: HarnessAPI | undefined, shell: Shell, data: LibraryData, view: LibraryView, groups: GroupDraft) {
+  const t = useT();
   const [draft, setDraft] = useState<ApplyDraft>(EMPTY_DRAFT);
   const [plan, setPlan] = useState<ApplyPlan | null>(null);
   const [results, setResults] = useState<BatchResult | null>(null);
@@ -55,7 +57,7 @@ export function useApplyFlow(api: HarnessAPI | undefined, shell: Shell, data: Li
     return shell.runTask('apply', async () => {
       setResults(await api!.apply(plan.request));
       await data.refresh();
-      if (hasConflict) shell.setToast('已提交无冲突项；冲突项由主进程保留并报告。');
+      if (hasConflict) shell.setToast(t('library.appliedItemsWithoutConflictsTheMainProcessKeptAndReported'));
     });
   };
 
@@ -70,7 +72,7 @@ export function useApplyFlow(api: HarnessAPI | undefined, shell: Shell, data: Li
       await api!.saveGroup(groups.request([...view.selected]));
       await data.refresh();
       leaveSelection();
-      shell.setToast('技能已加入分组。');
+      shell.setToast(t('library.skillsAddedToGroup'));
     });
 
   const finish = () => {

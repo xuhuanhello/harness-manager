@@ -1,3 +1,4 @@
+import { AppError } from '../shared/errors';
 import type { MarketplaceCatalog, MarketplaceCatalogRequest, MarketplaceSkill } from '../shared/types';
 import { appError } from './messages';
 
@@ -132,7 +133,7 @@ export class MarketplaceCatalogService {
         visited.add(currentUrl.href);
       }
     } catch (error) {
-      if (error instanceof Error && error.message.includes('重定向')) throw error;
+      if (error instanceof AppError && error.code.startsWith('CATALOG_REDIRECT_')) throw error;
       if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
         throw appError('CATALOG_TIMEOUT', { market: marketplaceLabel(marketplaceId) });
       }
@@ -338,7 +339,7 @@ async function readResponseText(
       chunks.push(value);
     }
   } catch (error) {
-    if (error instanceof Error && error.message.includes('超过')) throw error;
+    if (error instanceof AppError && ['CATALOG_RESPONSE_TOO_LARGE', 'CATALOG_ERROR_TOO_LARGE'].includes(error.code)) throw error;
     if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
       throw appError('CATALOG_TIMEOUT', { market: marketplaceLabel(marketplaceId) });
     }

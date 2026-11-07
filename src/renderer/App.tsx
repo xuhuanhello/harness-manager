@@ -1,3 +1,4 @@
+import { useT } from './i18n';
 import { useEffect } from 'react';
 import { Boxes, Check, CircleHelp, LoaderCircle, ShieldCheck, X } from 'lucide-react';
 import MarketplaceCatalog, { type CatalogMarketplaceId } from './components/MarketplaceCatalog';
@@ -27,10 +28,14 @@ import { LibraryPage } from './pages/LibraryPage';
 import { MarketplacePage } from './pages/MarketplacePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { WorkspacePage } from './pages/WorkspacePage';
+import { planHarnessRemoval } from './removal-plan';
+import { useAppUpdate } from './hooks/useAppUpdate';
+import { AppUpdateDialog } from './components/AppUpdate';
 
 const CATALOG_MARKETPLACES = ['skills-sh', 'skillsmp'];
 
 function App() {
+  const t = useT();
   const api = typeof window !== 'undefined' ? window.harness : undefined;
   const shell = useShell();
   const data = useLibraryData(api, shell);
@@ -44,6 +49,7 @@ function App() {
   const market = useMarketplaceSettings(api, shell, data);
   const workspace = useWorkspaceFlow(api, shell, data, view);
   const updates = useUpdates(api, shell, data);
+  const appUpdate = useAppUpdate(api);
   const { page, setPage, dialog, busy, error, setError, toast, setToast } = shell;
   const { checkIfStale } = updates;
 
@@ -59,10 +65,10 @@ function App() {
             <Boxes size={21} />
           </div>
           <p className="eyebrow">HARNESS MANAGER</p>
-          <h1>需要桌面应用连接</h1>
-          <p>此页面需要通过 Harness Manager 桌面应用打开，才能安全访问来源仓库、技能库和本机 Harness 配置。</p>
+          <h1>{t('app.desktopConnectionRequired')}</h1>
+          <p>{t('app.openThisPageInHarnessManagerToAccessSourceRepositories')}</p>
           <div className="bridge-line">
-            <ShieldCheck size={16} /> 本地文件操作仅由 Electron 主进程处理
+            <ShieldCheck size={16} /> {t('app.localFileOperationsRunInTheElectronMainProcess')}
           </div>
         </div>
       </div>
@@ -73,7 +79,7 @@ function App() {
     return (
       <div className="loading-screen">
         <LoaderCircle className="spin" size={24} />
-        <span>正在连接技能库…</span>
+        <span>{t('app.connectingToLibrary')}</span>
       </div>
     );
   if (!snapshot || !allSnapshot)
@@ -81,14 +87,17 @@ function App() {
       <div className="loading-screen">
         <div className="error-card">
           <CircleHelp size={22} />
-          <h2>无法载入技能库</h2>
-          <p>{error || '请检查应用状态后重试。'}</p>
+          <h2>{t('app.couldNotLoadLibrary')}</h2>
+          <p>{error || t('app.checkTheAppAndTryAgain')}</p>
           <button className="button primary" onClick={data.retry}>
-            重新连接
+            {t('app.reconnect')}
           </button>
         </div>
       </div>
     );
+
+  const removalPlan = planHarnessRemoval(allSnapshot, view.harnessId, view.selected);
+  const harnessName = snapshot.harnesses.find((harness) => harness.id === view.harnessId)?.name || 'Harness';
 
   const pickSkillsToApply = (message: string) => {
     setPage('library');
@@ -103,6 +112,7 @@ function App() {
   return (
     <div className="app-shell">
       <Sidebar
+        appUpdate={appUpdate}
         snapshot={snapshot}
         page={page}
         activeMarketplaceId={activeMarketplace?.id}
@@ -132,13 +142,11 @@ function App() {
               view={view}
               data={data}
               updates={updates}
-              busy={busy}
               onNavigate={setPage}
               onAddSource={() => {
                 setError('');
                 shell.setDialog('add-source');
               }}
-              onRemove={workspace.openRemove}
               onLeaveSelection={workspace.leaveSelection}
               onPickSkillsToApply={pickSkillsToApply}
             />
@@ -149,8 +157,23 @@ function App() {
               snapshot={snapshot}
               busy={busy}
               onMigrate={migration.open}
-              onApply={() => pickSkillsToApply('选择中央库技能后，可以按需应用到 Harness。')}
+              onRevealExternal={data.revealExternalSkill}
+              onRevealDistribution={data.revealDistribution}
+              onApply={() => pickSkillsToApply(t('app.selectLibrarySkillsToApplyThemToAHarness'))}
               onOpenWorkspaces={() => setPage('workspaces')}
+              onManageLibrary={async (harnessId) => {
+                updates.leave();
+                view.setSearch('');
+                await data.setMode('harness');
+                await data.setActiveTab('harness', harnessId);
+                setPage('library');
+                view.beginSelection();
+                setToast(t('app.selectSkillsOrSectionsToUnapplyThemBelow'));
+              }}
+              onManageWorkspace={(path) => {
+                workspace.setSelectedPath(path);
+                setPage('workspaces');
+              }}
             />
           )}
 
@@ -190,11 +213,22 @@ function App() {
               busy={busy}
               onAddSkills={workspace.addSkills}
               onRemove={workspace.openRemove}
+              removalSelections={workspace.removalSelections}
+              setRemovalSelections={workspace.setRemovalSelections}
             />
           )}
 
           {page === 'settings' && (
             <SettingsPage
+              appUpdate={appUpdate}
+              onAutoCheck={(autoCheck) => {
+                data.patchSettings({ appUpdates: { autoCheck } });
+                void api.saveSettings({ appUpdates: { autoCheck } }).catch((error) => {
+                  setError(String(error));
+                  void data.refresh();
+                });
+              }}
+              onLocale={data.setLocale}
               snapshot={allSnapshot}
               onCreate={() => harnessEditor.open(undefined, 'settings')}
               onEdit={(harness) => harnessEditor.open(harness, 'settings')}
@@ -212,6 +246,16 @@ function App() {
         {view.selectMode && page === 'library' && !updates.viewing && (
           <SelectionDock
             view={view}
+            unapply={
+              view.mode === 'harness'
+                ? {
+                    harnessName,
+                    count: removalPlan.skillIds.length,
+                    outsideCount: removalPlan.outsideCount,
+                    onClick: () => workspace.openRemove({ ...removalPlan, harnessName, origin: 'library', scopeLabel: t('app.user') }),
+                  }
+                : undefined
+            }
             onReview={() => shell.setDialog('selected')}
             onApply={() => apply.open(undefined, workspace.returnPath)}
           />
@@ -222,13 +266,14 @@ function App() {
         <div className="toast" role="status">
           <Check size={15} />
           {toast}
-          <button className="icon-button small" aria-label="关闭通知" onClick={() => setToast('')}>
+          <button className="icon-button small" aria-label={t('app.dismissNotification')} onClick={() => setToast('')}>
             <X size={13} />
           </button>
         </div>
       )}
 
       {dialog === 'add-source' && <SourceDialog shell={shell} wizard={wizard} groups={snapshot.groups} />}
+      <AppUpdateDialog update={appUpdate} />
       {dialog === 'onboarding' && <OnboardingDialog shell={shell} draft={groups} groups={snapshot.groups} />}
       {dialog === 'apply' && (
         <ApplyDialog

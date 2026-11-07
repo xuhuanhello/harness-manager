@@ -1,3 +1,6 @@
+import { useT } from '../i18n';
+import { RevealSkillButton } from './RevealSkillButton';
+import { SectionHeading } from './SectionHeading';
 import { useEffect, useRef, useState } from 'react';
 import {
   Check,
@@ -5,7 +8,6 @@ import {
   CircleArrowUp,
   ExternalLink,
   Folder,
-  FolderOpen,
   Github,
   HardDrive,
   Layers3,
@@ -35,6 +37,7 @@ export function ViewMenu({
   onChange: (value: ViewMode) => void;
   updates?: UpdatesMenuItem;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -79,17 +82,19 @@ export function ViewMenu({
       }}
     >
       <ListFilter size={15} />
-      <span>分类方式</span>
+      <span>{t('library.viewMode')}</span>
       <button
         ref={trigger}
         data-testid="view-mode-select"
         className="view-menu-trigger"
-        aria-label={updates?.count && !updates.active ? `分类方式，${updates.count} 个技能可更新` : '分类方式'}
+        aria-label={
+          updates?.count && !updates.active ? t('library.viewModeSkillsHaveUpdates', { count: updates.count }) : t('library.viewMode')
+        }
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        {updates?.active ? '可更新' : modeTitle(value)}
+        {updates?.active ? t('library.updates') : modeTitle(value)}
         <ChevronDown size={14} />
         {!!updates?.count && !updates.active && (
           <span className="update-badge" aria-hidden="true">
@@ -98,8 +103,8 @@ export function ViewMenu({
         )}
       </button>
       {open && (
-        <div className="view-menu-popover" role="menu" aria-label="分类方式">
-          {modeItems.map((item) => (
+        <div className="view-menu-popover" role="menu" aria-label={t('library.viewMode')}>
+          {modeItems().map((item) => (
             <button
               role="menuitemradio"
               aria-checked={item.id === value && !updates?.active}
@@ -129,7 +134,7 @@ export function ViewMenu({
                 }}
               >
                 <CircleArrowUp size={15} />
-                <span>可更新</span>
+                <span>{t('library.updates')}</span>
                 {updates.count > 0 && <span className="update-count-pill">{updates.count}</span>}
                 {updates.active && <Check size={14} />}
               </button>
@@ -164,6 +169,7 @@ export function SkillSection({
   onOpenSkillSource: (skillId: string) => void;
   onRevealSkill: (skillId: string) => void;
 }) {
+  const t = useT();
   const uniqueIds = [...new Set(section.skills.map((skill) => skill.id))];
   const selectedMembers = uniqueIds.filter((id) => selected.has(id)).length;
   const all = uniqueIds.length > 0 && selectedMembers === uniqueIds.length;
@@ -185,12 +191,21 @@ export function SkillSection({
   return (
     <section className={`skill-section ${section.kind === 'flat' ? 'flat-section' : ''}`}>
       {section.kind !== 'flat' && (
-        <div className="section-heading">
+        <SectionHeading
+          label={section.label}
+          kind={section.kind}
+          icon={icon}
+          count={section.meta || t('library.itemCount', { count: uniqueIds.length })}
+          names={section.skills.map((skill) => skill.name)}
+          subtitle={section.kind === 'source' ? t('library.sourceRepositories') : section.kind === 'group' ? t('library.groups') : ''}
+          collapsed={collapsed}
+          onToggle={onToggle}
+        >
           {selectMode && (
             <input
               className="tri-checkbox"
               type="checkbox"
-              aria-label={`选择${section.label}中的 ${uniqueIds.length} 个技能`}
+              aria-label={t('library.selectSkillsIn', { label: section.label, count: uniqueIds.length })}
               checked={all}
               ref={(node) => {
                 if (node) node.indeterminate = partial;
@@ -198,15 +213,7 @@ export function SkillSection({
               onChange={() => onToggleMany(uniqueIds)}
             />
           )}
-          <button className="section-collapse" aria-expanded={!collapsed} onClick={onToggle}>
-            <ChevronDown size={15} className={collapsed ? 'collapsed' : ''} />
-          </button>
-          <span className={`section-kind-icon ${section.kind}`}>{icon}</span>
-          <strong>{section.label}</strong>
-          <span className="section-count">{section.meta || `${uniqueIds.length} 项`}</span>
-          {section.kind === 'source' && <span className="section-subtitle">来源仓库</span>}
-          {section.kind === 'group' && <span className="section-subtitle">业务分组</span>}
-        </div>
+        </SectionHeading>
       )}
       {!collapsed && (
         <div className={`skill-list ${section.kind === 'flat' ? 'flat-list' : ''}`}>
@@ -223,7 +230,7 @@ export function SkillSection({
             />
           ))}
           {!section.skills.length && section.kind === 'group' && section.id === 'group:ungrouped' && (
-            <div className="section-empty">所有技能都已加入分组。</div>
+            <div className="section-empty">{t('library.allSkillsAlreadyBelongToAGroup')}</div>
           )}
         </div>
       )}
@@ -248,6 +255,7 @@ export function SkillRow({
   onOpenSkillSource: () => void;
   onRevealSkill: () => void;
 }) {
+  const t = useT();
   const groups = snapshot.groups.filter((group) => group.skillIds.includes(skill.id));
   const distributions = snapshot.distributions.filter((item) => item.skillId === skill.id);
   const health = distributions.find((item) => item.health !== 'healthy')?.health;
@@ -264,7 +272,7 @@ export function SkillRow({
           checked={selected}
           onChange={onToggle}
           onClick={(event) => event.stopPropagation()}
-          aria-label={`选择 ${skill.name}`}
+          aria-label={t('library.select', { name: skill.name })}
         />
       )}
       <div className="skill-avatar">{initial(skill.name)}</div>
@@ -273,11 +281,17 @@ export function SkillRow({
           <h3>{skill.name}</h3>
           {health && (
             <span className={`health-pill ${health}`}>
-              {health === 'missing' ? '缺失' : health === 'broken' ? '断链' : health === 'stale' ? '待同步' : '冲突'}
+              {health === 'missing'
+                ? t('library.missing')
+                : health === 'broken'
+                  ? t('library.brokenLink')
+                  : health === 'stale'
+                    ? t('library.outOfSyncStatus')
+                    : t('library.conflict')}
             </span>
           )}
         </div>
-        <p>{skill.description || '暂无描述。'}</p>
+        <p>{skill.description || t('library.noDescription')}</p>
         <div className="skill-tags">
           {groups.slice(0, 2).map((group) => (
             <span className="tag group-tag" key={group.id}>
@@ -301,10 +315,10 @@ export function SkillRow({
           {distributions.length ? (
             <>
               <span className="tiny-status" />
-              已应用到 {distributions.length} 个目标
+              {t('library.appliedDestinationCount', { count: distributions.length })}
             </>
           ) : (
-            '仅在中央库'
+            t('library.libraryOnly')
           )}
         </span>
         <div className="skill-row-actions">
@@ -312,30 +326,17 @@ export function SkillRow({
             <button
               type="button"
               className="skill-row-action"
-              aria-label={`在网页中打开 ${skill.name}`}
+              aria-label={t('library.openOnTheWeb', { name: skill.name })}
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenSkillSource();
               }}
             >
               <ExternalLink size={12} />
-              在网页中打开
+              {t('library.openSourceWebpage')}
             </button>
           )}
-          {skill.directory && (
-            <button
-              type="button"
-              className="skill-row-action"
-              aria-label={`在访达中显示 ${skill.name}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onRevealSkill();
-              }}
-            >
-              <FolderOpen size={12} />
-              在访达中显示
-            </button>
-          )}
+          {skill.directory && <RevealSkillButton name={skill.name} className="skill-row-action" onReveal={onRevealSkill} />}
         </div>
       </div>
     </article>
@@ -343,6 +344,7 @@ export function SkillRow({
 }
 
 export function EmptyLibrary({ onAdd }: { onAdd: () => void }) {
+  const t = useT();
   return (
     <div className="empty-library">
       <div className="empty-illustration">
@@ -355,25 +357,25 @@ export function EmptyLibrary({ onAdd }: { onAdd: () => void }) {
         <span className="empty-spark spark-one" />
         <span className="empty-spark spark-two" />
       </div>
-      <p className="eyebrow">从一个技能开始</p>
-      <h2>你的中央技能库还是空的</h2>
-      <p>添加 GitHub 仓库或本地目录，扫描后只安装你选择的技能。安装到库中不会自动应用到任何 Harness。</p>
+      <p className="eyebrow">{t('library.startWithOneSkill')}</p>
+      <h2>{t('library.yourSkillLibraryIsEmpty')}</h2>
+      <p>{t('library.addAGithubRepositoryOrLocalDirectoryThenImportThe')}</p>
       <button className="button primary" onClick={onAdd}>
         <Plus size={16} />
-        添加第一个来源
+        {t('library.addYourFirstSource')}
       </button>
       <div className="empty-points">
         <span>
           <Check size={13} />
-          扫描不运行仓库脚本
+          {t('library.scanningNeverRunsRepositoryScripts')}
         </span>
         <span>
           <Check size={13} />
-          可跳过业务分组
+          {t('library.groupsAreOptional')}
         </span>
         <span>
           <Check size={13} />
-          按需安装到目标
+          {t('library.applyToDestinationsAsNeeded')}
         </span>
       </div>
     </div>

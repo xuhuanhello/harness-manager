@@ -1,3 +1,5 @@
+import { formatList, quote } from '../shared/i18n';
+import { t } from '../shared/i18n';
 import { candidateGroup } from '../shared/candidate-groups';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -31,7 +33,7 @@ import { appError, message } from './messages';
 
 const execFileAsync = promisify(execFile);
 const SETTINGS_ID = 'ui';
-const DEFAULT_SETTINGS: Settings = { viewMode: 'source', activeTabs: {} };
+const DEFAULT_SETTINGS: Settings = { locale: 'system', viewMode: 'source', activeTabs: {} };
 const SKILL_ID_RE = ID_PATTERNS.skill;
 const SOURCE_ID_RE = ID_PATTERNS.source;
 const OPERATION_ID_RE = ID_PATTERNS.uuid;
@@ -216,7 +218,7 @@ export class LibraryService {
       .filter((group): group is Group => !!group);
     if (conflicts.length && !request.mergeExistingGroups) {
       const names = [...new Set(conflicts.map((group) => group.name))];
-      throw appError('GROUP_NAMES_TAKEN', { names: names.map((name) => `“${name}”`).join('、') });
+      throw appError('GROUP_NAMES_TAKEN', { names: formatList(names.map(quote)) });
     }
 
     const items: ItemResult[] = [];
@@ -245,7 +247,7 @@ export class LibraryService {
           const existing = this.store.list<Group>('groups').find((group) => normalizeGroupName(group.name) === normalizeGroupName(name));
           this.saveGroup(existing ? { groupId: existing.id, skillIds: ids } : { name, skillIds: ids });
         } catch (error) {
-          items.push({ id: `group:${name}`, label: `分组 ${name}`, status: 'error', message: errorMessage(error) });
+          items.push({ id: `group:${name}`, label: t('library.group', { name: name }), status: 'error', message: errorMessage(error) });
         }
       }
     } else if (request.customGroupName !== undefined) {
@@ -258,7 +260,12 @@ export class LibraryService {
             .find((group) => normalizeGroupName(group.name) === normalizeGroupName(groupName));
           this.saveGroup(existing ? { groupId: existing.id, skillIds: successfulIds } : { name: groupName, skillIds: successfulIds });
         } catch (error) {
-          items.push({ id: `group:${groupName}`, label: `分组 ${groupName}`, status: 'error', message: errorMessage(error) });
+          items.push({
+            id: `group:${groupName}`,
+            label: t('library.groupResultLabel', { groupName: groupName }),
+            status: 'error',
+            message: errorMessage(error),
+          });
         }
       }
     }
@@ -301,6 +308,8 @@ export class LibraryService {
   saveSettings(settings: Partial<Settings>): void {
     const current = this.store.get<Settings>('settings', SETTINGS_ID) ?? DEFAULT_SETTINGS;
     const next: Settings = {
+      appUpdates: settings.appUpdates ?? current.appUpdates ?? { autoCheck: true },
+      locale: settings.locale ?? current.locale ?? 'system',
       viewMode: settings.viewMode ?? current.viewMode,
       activeTabs: { ...current.activeTabs, ...(settings.activeTabs ?? {}) },
     };

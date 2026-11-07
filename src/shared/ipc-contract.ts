@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import type { AppUpdateState } from './app-update';
 import type { HarnessCleanupPreview, HarnessCleanupResult, HarnessInstallationResult } from './harness-installation';
 import type { Action } from './ipc-actions';
 import { CONTROL_CHARACTERS, ID_PATTERNS, LIMITS } from './limits';
 import type {
+  AppInfo,
   ApplyPlan,
   BatchResult,
   ExternalMigrationPreview,
@@ -22,7 +24,9 @@ import type {
  * Imported at runtime only by the main process; the renderer uses its types.
  */
 
-z.config(z.locales.zhCN());
+export function configureValidationLocale(locale: 'zh-CN' | 'en') {
+  z.config(locale === 'zh-CN' ? z.locales.zhCN() : z.locales.en());
+}
 
 const visible = (value: string) => !CONTROL_CHARACTERS.test(value);
 const id = z.string().trim().min(1).max(LIMITS.idLength);
@@ -54,12 +58,27 @@ const action =
   <I extends z.ZodType>(input: I): ActionDef<I, O> => ({ input });
 
 export const contract = {
+  appUpdateState: action<AppUpdateState>()(z.undefined()),
+  checkAppUpdate: action<AppUpdateState>()(z.undefined()),
+  downloadAppUpdate: action<AppUpdateState>()(z.undefined()),
+  cancelAppUpdate: action<AppUpdateState>()(z.undefined()),
+  installAppUpdate: action<AppUpdateState>()(z.undefined()),
+  openAppUpdatePage: action<void>()(
+    z
+      .object({ url: z.string().max(4096).optional() })
+      .strict()
+      .optional(),
+  ),
+  openAppUpdateSettings: action<void>()(z.undefined()),
   detectHarnessInstallations: action<HarnessInstallationResult[]>()(z.object({ refresh: z.boolean().optional() }).strict().optional()),
   previewHarnessCleanup: action<HarnessCleanupPreview>()(z.object({ harnessId, path }).strict()),
   cleanupHarness: action<HarnessCleanupResult>()(z.object({ token: id }).strict()),
   revealHarnessDirectory: action<void>()(z.object({ harnessId, path }).strict()),
   openSkillSource: action<void>()(z.object({ skillId: id }).strict()),
   revealSkill: action<void>()(z.object({ skillId: id }).strict()),
+  revealExternalSkill: action<void>()(z.object({ externalSkillId: patterned(ID_PATTERNS.external) }).strict()),
+  revealDistribution: action<void>()(z.object({ distributionId: id }).strict()),
+  appInfo: action<AppInfo>()(z.undefined()),
   snapshot: action<Snapshot>()(z.undefined()),
   migrationRepairs: action<ManagedLinkRepairPreview[]>()(z.object({ externalSkillId: id }).strict()),
   repairManagedLink: action<BatchResult>()(z.object({ repairId: id }).strict()),
@@ -167,6 +186,8 @@ export const contract = {
   saveSettings: action<void>()(
     z
       .object({
+        locale: z.enum(['system', 'zh-CN', 'en']).optional(),
+        appUpdates: z.object({ autoCheck: z.boolean() }).strict().optional(),
         viewMode: z.enum(['source', 'harness', 'group', 'flat']).optional(),
         activeTabs: z
           .record(
@@ -191,7 +212,7 @@ export type HarnessAPI = {
   [K in Action]: undefined extends ActionInput<K>
     ? (input?: ActionInput<K>) => Promise<ActionOutput<K>>
     : (input: ActionInput<K>) => Promise<ActionOutput<K>>;
-} & { onChanged(callback: () => void): () => void };
+} & { onChanged(callback: () => void): () => void; onAppUpdate(callback: (state: AppUpdateState) => void): () => void };
 
 declare global {
   interface Window {

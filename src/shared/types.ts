@@ -1,3 +1,9 @@
+export interface AppInfo {
+  systemLocale?: import('./i18n').Locale;
+  version: string;
+  platform: NodeJS.Platform;
+}
+
 export type ViewMode = 'source' | 'harness' | 'group' | 'flat';
 export type Strategy = 'symlink' | 'copy';
 export type Scope = 'user' | 'workspace';
@@ -128,6 +134,8 @@ export interface ExternalSkill {
   workspaceId?: string;
 }
 export interface Settings {
+  appUpdates?: { autoCheck: boolean };
+  locale: import('./i18n').LocalePreference;
   viewMode: ViewMode;
   activeTabs: Record<string, string>;
 }

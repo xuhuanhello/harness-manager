@@ -1,3 +1,6 @@
+import { Trans } from '../i18n';
+import { formatNumber, formatDateTime } from '../i18n';
+import { t, useT } from '../i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ExternalLink, Flame, Github, LoaderCircle, RefreshCw, Search, ShieldCheck, Star, TrendingUp, X } from 'lucide-react';
 import type {
@@ -26,29 +29,30 @@ type Props = {
   onImportSource: (source: string) => void;
 };
 
-const boardItems: { id: CatalogBoard; label: string; icon: typeof TrendingUp }[] = [
-  { id: 'all-time', label: '全部', icon: Star },
-  { id: 'trending', label: '趋势', icon: TrendingUp },
-  { id: 'hot', label: '热门', icon: Flame },
+const boardItems = (): { id: CatalogBoard; label: string; icon: typeof TrendingUp }[] => [
+  { id: 'all-time', label: t('marketplace.all'), icon: Star },
+  { id: 'trending', label: t('marketplace.trending'), icon: TrendingUp },
+  { id: 'hot', label: t('marketplace.popular'), icon: Flame },
 ];
 const MAX_CATALOG_PAGES = 100;
 
 function errorText(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '');
   if (/[\u3400-\u9fff]/.test(message)) return message;
-  if (/429|rate.?limit|too many|频繁|限流/i.test(message)) return '请求过于频繁，请稍后再试。';
-  if (/network|fetch|timeout|offline|econn|socket|connect|网络|连接/i.test(message)) return '无法连接技能目录，请检查网络后重试。';
-  return '技能目录加载失败，请重试。';
+  if (/429|rate.?limit|too many|频繁|限流/i.test(message)) return t('marketplace.tooManyRequestsTryAgainLater');
+  if (/network|fetch|timeout|offline|econn|socket|connect|网络|连接/i.test(message))
+    return t('marketplace.couldNotConnectToTheSkillCatalogCheckYourConnection');
+  return t('marketplace.couldNotLoadTheSkillCatalogTryAgain');
 }
 
 function compactNumber(value: number | undefined) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  return new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+  return formatNumber(value, { notation: 'compact', maximumFractionDigits: 1 });
 }
 
 function repositoryName(value: string) {
   const source = value.trim();
-  if (!source) return '未知仓库';
+  if (!source) return t('marketplace.unknownRepository');
   try {
     if (/^https?:\/\//i.test(source)) {
       const url = new URL(source);
@@ -85,7 +89,7 @@ function skillKey(skill: MarketplaceCatalogSkill) {
 
 function catalogDate(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? '' : formatDateTime(date, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 export default function MarketplaceCatalog({
@@ -100,6 +104,7 @@ export default function MarketplaceCatalog({
   onImportSkill,
   onImportSource,
 }: Props) {
+  const t = useT();
   const marketplaceId = marketplace.id as CatalogMarketplaceId;
   const isSkillsMp = marketplaceId === 'skillsmp';
   const [board, setBoard] = useState<CatalogBoard>('all-time');
@@ -146,7 +151,7 @@ export default function MarketplaceCatalog({
         nextPage.current = result.page + 1;
         loadedPages.current = 1;
         if (result.hasMore && result.page >= MAX_CATALOG_PAGES - 1) {
-          setPagingStopped(`最多加载 ${MAX_CATALOG_PAGES} 页，已停止自动请求。`);
+          setPagingStopped(t('marketplace.stoppedLoadingAtTheLimitOfPages', { MAX_CATALOG_PAGES: MAX_CATALOG_PAGES }));
         }
       } catch (cause) {
         if (currentRequest !== requestId.current) return;
@@ -155,7 +160,7 @@ export default function MarketplaceCatalog({
         if (currentRequest === requestId.current) setLoading(false);
       }
     },
-    [isSkillsMp, loadCatalog, marketplaceId],
+    [isSkillsMp, loadCatalog, marketplaceId, t],
   );
 
   const clearCatalog = () => {
@@ -179,7 +184,7 @@ export default function MarketplaceCatalog({
       const currentRequest = requestId.current;
       if (!currentCatalog?.hasMore || loading || loadingMore || error || pagingStopped || inFlightPage.current !== null) return;
       if (page >= MAX_CATALOG_PAGES) {
-        setPagingStopped(`最多加载 ${MAX_CATALOG_PAGES} 页，已停止自动请求。`);
+        setPagingStopped(t('marketplace.stoppedLoadingAtTheLimitOfPages', { MAX_CATALOG_PAGES: MAX_CATALOG_PAGES }));
         return;
       }
       inFlightPage.current = page;
@@ -194,7 +199,7 @@ export default function MarketplaceCatalog({
           ...(refresh ? { refresh: true } : {}),
         });
         if (currentRequest !== requestId.current) return;
-        if (result.page !== page) throw new Error('技能目录返回了与请求页码不一致的结果，请重试。');
+        if (result.page !== page) throw new Error(t('marketplace.theCatalogReturnedAnUnexpectedPageTryAgain'));
         const existing = new Set(currentCatalog.skills.map(skillKey));
         const additions: MarketplaceCatalogSkill[] = [];
         for (const skill of result.skills) {
@@ -206,7 +211,7 @@ export default function MarketplaceCatalog({
         nextPage.current = result.page + 1;
         loadedPages.current += 1;
         if (!additions.length && result.hasMore) {
-          setPagingStopped('下一页没有提供新技能，已停止自动加载。');
+          setPagingStopped(t('marketplace.theNextPageHadNoNewSkillsAutomaticLoadingStopped'));
           return;
         }
         setCatalog((current) =>
@@ -218,7 +223,7 @@ export default function MarketplaceCatalog({
             : current,
         );
         if (result.hasMore && (result.page >= MAX_CATALOG_PAGES - 1 || loadedPages.current >= MAX_CATALOG_PAGES)) {
-          setPagingStopped(`最多加载 ${MAX_CATALOG_PAGES} 页，已停止自动请求。`);
+          setPagingStopped(t('marketplace.stoppedLoadingAtTheLimitOfPages', { MAX_CATALOG_PAGES: MAX_CATALOG_PAGES }));
         }
       } catch (cause) {
         if (currentRequest === requestId.current) setPageError(errorText(cause));
@@ -229,7 +234,7 @@ export default function MarketplaceCatalog({
         }
       }
     },
-    [board, catalog, error, isSkillsMp, loadCatalog, loading, loadingMore, marketplaceId, pagingStopped, submittedQuery],
+    [board, catalog, error, isSkillsMp, loadCatalog, loading, loadingMore, marketplaceId, pagingStopped, submittedQuery, t],
   );
 
   useEffect(() => {
@@ -338,11 +343,14 @@ export default function MarketplaceCatalog({
           </div>
           <div>
             <p className="eyebrow">{isSkillsMp ? 'SKILLSMP CATALOG' : 'SKILLS.SH CATALOG'}</p>
-            <h2>{marketplace.name} 技能目录</h2>
-            <span>{isSkillsMp ? '按关键词搜索技能，并按仓库选择导入' : '浏览榜单并按 GitHub 仓库选择导入'}</span>
+            <h2>{t('marketplace.catalogTitle', { name: marketplace.name })}</h2>
+            <span>
+              {isSkillsMp ? t('marketplace.searchSkillsAndImportByRepository') : t('marketplace.browseRankingsAndImportByGithubRepository')}
+            </span>
           </div>
           <button className="button subtle catalog-open-site" disabled={opening} onClick={onOpen}>
-            {opening ? <LoaderCircle size={14} className="spin" /> : <ExternalLink size={14} />}打开网站
+            {opening ? <LoaderCircle size={14} className="spin" /> : <ExternalLink size={14} />}
+            {t('marketplace.openWebsite')}
           </button>
         </div>
         {actionError && (
@@ -353,8 +361,8 @@ export default function MarketplaceCatalog({
 
         <div className="catalog-toolbar">
           {!isSkillsMp && (
-            <div className="catalog-board-tabs" role="tablist" aria-label="技能榜单">
-              {boardItems.map((item) => {
+            <div className="catalog-board-tabs" role="tablist" aria-label={t('marketplace.skillRankings')}>
+              {boardItems().map((item) => {
                 const Icon = item.icon;
                 return (
                   <button
@@ -386,13 +394,13 @@ export default function MarketplaceCatalog({
           <form className={`catalog-search ${isSkillsMp ? 'catalog-search-only' : ''}`} onSubmit={submitSearch}>
             <Search size={15} />
             <input
-              aria-label="搜索市场技能"
+              aria-label={t('marketplace.searchMarketplaceSkills')}
               value={input}
               onChange={(event) => onInput(event.target.value)}
-              placeholder={isSkillsMp ? '输入技能名称或关键词…' : '搜索技能或 GitHub 仓库…'}
+              placeholder={isSkillsMp ? t('marketplace.enterASkillNameOrKeyword') : t('marketplace.searchSkillsOrGithubRepositories')}
             />
             {!!input && (
-              <button type="button" className="catalog-clear-search" aria-label="清除搜索" onClick={() => onInput('')}>
+              <button type="button" className="catalog-clear-search" aria-label={t('marketplace.clearSearch')} onClick={() => onInput('')}>
                 <X size={13} />
               </button>
             )}
@@ -402,7 +410,8 @@ export default function MarketplaceCatalog({
               disabled={loading || (isSkillsMp && !input.trim())}
               data-testid="marketplace-catalog-search"
             >
-              {loading ? <LoaderCircle size={13} className="spin" /> : <Search size={13} />}搜索
+              {loading ? <LoaderCircle size={13} className="spin" /> : <Search size={13} />}
+              {t('marketplace.search')}
             </button>
           </form>
         </div>
@@ -411,10 +420,10 @@ export default function MarketplaceCatalog({
           <ShieldCheck size={14} />
           <span>
             {isSkillsMp
-              ? '搜索来自 SkillsMP；输入时不会自动请求。每组统计当前搜索结果，可能不是仓库中的全部技能。'
+              ? t('marketplace.searchIsProvidedBySkillsmpAndRunsOnlyWhenSubmitted')
               : submittedQuery
-                ? 'skills.sh 搜索接口最多返回 200 条且不支持翻页；结果按来源仓库分组。'
-                : '技能按来源仓库分组。每组显示当前获取到的技能数；这些结果不代表仓库中的全部技能。'}
+                ? t('marketplace.skillsShSearchReturnsUpTo200ResultsWithoutPagination')
+                : t('marketplace.skillsAreGroupedBySourceRepositoryEachCountReflectsThe')}
           </span>
         </div>
 
@@ -423,27 +432,31 @@ export default function MarketplaceCatalog({
             {loading ? (
               <>
                 <LoaderCircle size={13} className="spin" />
-                {isSkillsMp ? '正在搜索 SkillsMP…' : '正在加载技能榜单…'}
+                {isSkillsMp ? t('marketplace.searchingSkillsmp') : t('marketplace.loadingSkillRankings')}
               </>
             ) : catalog ? (
               <>
                 <span>
-                  {catalog.cached ? '缓存结果' : '已更新'}
-                  {catalogDate(catalog.fetchedAt) ? ` · ${catalogDate(catalog.fetchedAt)}` : ''}
+                  {t('marketplace.catalogUpdatedAt', {
+                    status: catalog.cached ? t('marketplace.cachedResults') : t('marketplace.updated'),
+                    time: catalogDate(catalog.fetchedAt),
+                  })}
                 </span>
-                {catalog.hasMore && !pagingStopped && <span className="catalog-more-note">向下滚动加载后续页</span>}
+                {catalog.hasMore && !pagingStopped && (
+                  <span className="catalog-more-note">{t('marketplace.scrollDownToLoadMorePages')}</span>
+                )}
                 {!catalog.hasMore && !!catalog.skills.length && (
                   <span className="catalog-more-note">
                     {submittedQuery && !isSkillsMp
-                      ? '搜索接口最多返回 200 条，缩小关键词可查看更多匹配项'
+                      ? t('marketplace.searchReturnsUpTo200ResultsRefineYourKeywordsFor')
                       : isSkillsMp
-                        ? '已到当前搜索结果末尾'
-                        : '已到当前榜单末尾'}
+                        ? t('marketplace.endOfSearchResults')
+                        : t('marketplace.endOfRankings')}
                   </span>
                 )}
               </>
             ) : isSkillsMp && !submittedQuery ? (
-              <span>输入关键词开始搜索</span>
+              <span>{t('marketplace.enterKeywordsToSearch')}</span>
             ) : null}
           </div>
           <div className="catalog-result-actions">
@@ -454,10 +467,9 @@ export default function MarketplaceCatalog({
                 data-loaded-skills={catalog.skills.length}
                 data-loaded-repositories={groups.length}
               >
-                {groups.length} 个仓库 · {catalog.skills.length} 个技能已加载
                 {catalog.total !== undefined && catalog.total > catalog.skills.length
-                  ? ` · 共 ${catalog.total.toLocaleString()} 个技能`
-                  : ''}
+                  ? t('marketplace.catalogCountTotal', { repositories: groups.length, skills: catalog.skills.length, total: catalog.total })
+                  : t('marketplace.catalogCount', { repositories: groups.length, skills: catalog.skills.length })}
               </span>
             )}
             <ListActions allExpanded={allGroupsExpanded} onToggleExpanded={toggleAllGroups} expandableCount={groups.length} />
@@ -470,7 +482,7 @@ export default function MarketplaceCatalog({
                 data-testid="marketplace-catalog-refresh"
               >
                 <RefreshCw size={13} />
-                刷新
+                {t('marketplace.refresh')}
               </button>
             )}
           </div>
@@ -479,12 +491,12 @@ export default function MarketplaceCatalog({
         {error && (
           <div className="catalog-error" role="alert">
             <div>
-              <strong>暂时无法加载技能目录</strong>
+              <strong>{t('marketplace.couldNotLoadTheSkillCatalog')}</strong>
               <span>{error}</span>
             </div>
             <button className="button subtle compact" onClick={retry} disabled={loading} data-testid="marketplace-catalog-retry">
               <RefreshCw size={13} />
-              重试
+              {t('marketplace.retry')}
             </button>
           </div>
         )}
@@ -492,7 +504,7 @@ export default function MarketplaceCatalog({
         {pageError && (
           <div className="catalog-error catalog-page-error" role="alert">
             <div>
-              <strong>后续页加载失败</strong>
+              <strong>{t('marketplace.couldNotLoadTheNextPage')}</strong>
               <span>{pageError}</span>
             </div>
             <button
@@ -502,7 +514,7 @@ export default function MarketplaceCatalog({
               data-testid="marketplace-catalog-page-retry"
             >
               <RefreshCw size={13} />
-              重试此页
+              {t('marketplace.retryThisPage')}
             </button>
           </div>
         )}
@@ -510,8 +522,8 @@ export default function MarketplaceCatalog({
         {loading && (
           <div className="catalog-state">
             <LoaderCircle size={21} className="spin" />
-            <strong>{isSkillsMp ? '正在搜索 SkillsMP…' : '正在加载技能榜单…'}</strong>
-            <span>正在获取最新目录结果。</span>
+            <strong>{isSkillsMp ? t('marketplace.searchingSkillsmp') : t('marketplace.loadingSkillRankings')}</strong>
+            <span>{t('marketplace.fetchingTheLatestCatalogResults')}</span>
           </div>
         )}
 
@@ -520,8 +532,8 @@ export default function MarketplaceCatalog({
             <div className="catalog-state-icon">
               <Search size={19} />
             </div>
-            <strong>搜索 SkillsMP 技能</strong>
-            <span>输入关键词后点击“搜索”或按 Enter。也可以试试这些关键词：</span>
+            <strong>{t('marketplace.searchSkillsmp')}</strong>
+            <span>{t('marketplace.enterKeywordsAndClickSearchOrPressEnterYouCan')}</span>
             <div className="catalog-query-examples">
               {['react', 'testing', 'design'].map((query) => (
                 <button type="button" key={query} onClick={() => runSearch(query)}>
@@ -537,8 +549,10 @@ export default function MarketplaceCatalog({
             <div className="catalog-state-icon">
               <Search size={19} />
             </div>
-            <strong>{submittedQuery ? '没有找到匹配的技能' : '暂时没有可显示的技能'}</strong>
-            <span>{submittedQuery ? '试试其他关键词，或刷新目录。' : '刷新后重新获取技能目录。'}</span>
+            <strong>{submittedQuery ? t('marketplace.noMatchingSkills') : t('marketplace.noSkillsToDisplayYet')}</strong>
+            <span>
+              {submittedQuery ? t('marketplace.tryDifferentKeywordsOrRefreshTheCatalog') : t('marketplace.refreshToReloadTheSkillCatalog')}
+            </span>
           </div>
         )}
 
@@ -564,12 +578,12 @@ export default function MarketplaceCatalog({
                   </span>
                   <span className="catalog-repo-copy">
                     <strong>{group.source}</strong>
-                    <small>当前结果已获取 {group.skills.length} 个技能</small>
+                    <small>{t('marketplace.loadedSkillCount', { count: group.skills.length })}</small>
                   </span>
                   <button
                     className="button subtle compact catalog-import-repo"
                     type="button"
-                    aria-label={`扫描仓库并选择安装 ${group.source}`}
+                    aria-label={t('marketplace.scanRepositoryAndChooseSkillsFrom', { source: group.source })}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -577,7 +591,7 @@ export default function MarketplaceCatalog({
                     }}
                   >
                     <Search size={13} />
-                    扫描仓库并选择安装
+                    {t('marketplace.scanRepositoryAndChooseSkills')}
                   </button>
                 </summary>
                 <div className="catalog-skill-list">
@@ -591,12 +605,20 @@ export default function MarketplaceCatalog({
                           {isSkillsMp ? (
                             <span>
                               <Star size={12} />
-                              {compactNumber(skill.stars)} 仓库 Star
+                              <Trans
+                                id="marketplace.starCount"
+                                values={{ count: skill.stars ?? 0 }}
+                                render={{ count: () => compactNumber(skill.stars) }}
+                              />
                             </span>
                           ) : (
                             <span>
                               <TrendingUp size={12} />
-                              {compactNumber(skill.installs)} 次安装
+                              <Trans
+                                id="marketplace.installCount"
+                                values={{ count: skill.installs ?? 0 }}
+                                render={{ count: () => compactNumber(skill.installs) }}
+                              />
                             </span>
                           )}
                         </div>
@@ -605,21 +627,21 @@ export default function MarketplaceCatalog({
                         <button
                           className="button subtle compact catalog-open-skill"
                           type="button"
-                          aria-label={`在网页中打开 ${skill.name}`}
+                          aria-label={t('marketplace.openOnTheWeb', { name: skill.name })}
                           onClick={() => onOpenSkill(skill.url!)}
                         >
                           <ExternalLink size={13} />
-                          在网页中打开
+                          {t('marketplace.openSkillWebpage')}
                         </button>
                       )}
                       <button
                         className="button subtle compact catalog-import-skill"
                         type="button"
-                        aria-label={`选择安装 ${skill.name}`}
+                        aria-label={t('marketplace.chooseToInstall', { name: skill.name })}
                         onClick={() => onImportSkill(group.source, skill.skillId)}
                       >
                         <Search size={13} />
-                        选择安装
+                        {t('marketplace.chooseInstallAction')}
                       </button>
                     </article>
                   ))}
@@ -635,7 +657,7 @@ export default function MarketplaceCatalog({
             {loadingMore ? (
               <span className="catalog-pagination-status">
                 <LoaderCircle size={14} className="spin" />
-                正在加载下一页…
+                {t('marketplace.loadingNextPage')}
               </span>
             ) : (
               <button
@@ -645,7 +667,7 @@ export default function MarketplaceCatalog({
                 data-testid="marketplace-load-more"
               >
                 <RefreshCw size={13} />
-                加载更多
+                {t('marketplace.loadMore')}
               </button>
             )}
           </div>
@@ -659,7 +681,7 @@ export default function MarketplaceCatalog({
 
       <div className="marketplace-safety-note">
         <ShieldCheck size={15} />
-        <span>选择技能后会先扫描仓库并展示候选列表，只有你在确认后才会导入中央库。</span>
+        <span>{t('marketplace.selectingASkillScansTheRepositoryAndShowsItsCandidates')}</span>
       </div>
     </div>
   );

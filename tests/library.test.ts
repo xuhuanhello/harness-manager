@@ -178,6 +178,8 @@ describe('LibraryService', () => {
     service.saveSettings({ activeTabs: { source: 'all' } });
     expect(store.get<{ id: string; viewMode: string; activeTabs: Record<string, string> }>('settings', 'ui')).toEqual({
       id: 'ui',
+      appUpdates: { autoCheck: true },
+      locale: 'system',
       viewMode: 'group',
       activeTabs: { group: group.id, source: 'all' },
     });

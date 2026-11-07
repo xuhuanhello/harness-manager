@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { useCallback, useState } from 'react';
 import { errorMessage } from '../../shared/errors';
 import type { HarnessAPI } from '../../shared/ipc-contract';
@@ -7,6 +8,7 @@ import type { Shell } from './useShell';
 
 /** Marketplace pages, their catalog search input, and adding, editing or removing custom marketplaces. */
 export function useMarketplaceSettings(api: HarnessAPI | undefined, shell: Shell, data: LibraryData) {
+  const t = useT();
   const { setBusy, setDialog, setToast } = shell;
   const [input, setInput] = useState('');
   const [pageError, setPageError] = useState('');
@@ -17,10 +19,10 @@ export function useMarketplaceSettings(api: HarnessAPI | undefined, shell: Shell
 
   const loadCatalog = useCallback(
     (request: MarketplaceCatalogRequest): Promise<MarketplaceCatalog> => {
-      if (!api) return Promise.reject(new Error('桌面应用连接不可用。'));
+      if (!api) return Promise.reject(new Error(t('marketplace.desktopConnectionUnavailable')));
       return api.marketplaceCatalog(request);
     },
-    [api],
+    [api, t],
   );
 
   /** Opens a marketplace page from the sidebar; switching marketplaces clears the previous one's input and errors. */
@@ -76,23 +78,23 @@ export function useMarketplaceSettings(api: HarnessAPI | undefined, shell: Shell
       url = new URL(draft.url.trim());
       if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) throw new Error();
     } catch {
-      setFormError('请输入有效的 HTTP 或 HTTPS 网站地址。');
+      setFormError(t('marketplace.enterAValidHttpOrHttpsUrl'));
       return;
     }
     if (!name) {
-      setFormError('请输入市场名称。');
+      setFormError(t('marketplace.enterAMarketplaceName'));
       return;
     }
     setBusy('marketplace-save');
     setFormError('');
     try {
       const saved = await api?.saveMarketplace({ ...(draft.id ? { id: draft.id } : {}), name, url: url.href });
-      if (!saved) throw new Error('桌面应用连接不可用。');
+      if (!saved) throw new Error(t('marketplace.desktopConnectionUnavailable'));
       const activeTabs = { ...data.snapshot!.settings.activeTabs, marketplace: saved.id };
       await api?.saveSettings({ activeTabs });
       data.patchSettings({ activeTabs });
       setDialog(null);
-      setToast(`${saved.name} 已保存。`);
+      setToast(t('marketplace.saved', { name: saved.name }));
       await data.refresh();
     } catch (cause) {
       setFormError(errorMessage(cause));
@@ -132,7 +134,7 @@ export function useMarketplaceSettings(api: HarnessAPI | undefined, shell: Shell
       data.setAllSnapshot(next);
       setDialog(null);
       setToRemove(null);
-      setToast(`${toRemove.name} 已删除。`);
+      setToast(t('marketplace.deleted', { name: toRemove.name }));
     } catch (cause) {
       setFormError(errorMessage(cause));
     } finally {

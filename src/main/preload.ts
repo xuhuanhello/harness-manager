@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcResult } from '../shared/errors';
-import { ACTIONS, CHANGED_CHANNEL, INVOKE_CHANNEL } from '../shared/ipc-actions';
+import { ACTIONS, APP_UPDATE_CHANNEL, CHANGED_CHANNEL, INVOKE_CHANNEL } from '../shared/ipc-actions';
 import type { HarnessAPI } from '../shared/ipc-contract';
 
 async function invoke(action: string, payload?: unknown): Promise<unknown> {
@@ -13,11 +13,16 @@ async function invoke(action: string, payload?: unknown): Promise<unknown> {
 // Payloads are validated and typed in the main process; the bridge itself only forwards them.
 const actions = Object.fromEntries(ACTIONS.map((action) => [action, (payload?: unknown) => invoke(action, payload)])) as unknown as Omit<
   HarnessAPI,
-  'onChanged'
+  'onChanged' | 'onAppUpdate'
 >;
 
 const api: HarnessAPI = {
   ...actions,
+  onAppUpdate: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: Parameters<typeof callback>[0]) => callback(state);
+    ipcRenderer.on(APP_UPDATE_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(APP_UPDATE_CHANNEL, handler);
+  },
   onChanged: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on(CHANGED_CHANNEL, handler);

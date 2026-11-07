@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import type { Harness } from './types';
 
 /** Built-ins enabled on a fresh install. Others start disabled until the user turns them on. */
@@ -14,7 +15,7 @@ export const DEFAULT_ENABLED_HARNESS_IDS: ReadonlySet<string> = new Set(['univer
 export const BUILTIN_HARNESSES: Harness[] = [
   {
     id: 'universal',
-    name: '通用 Agents 技能',
+    name: 'Universal Agents skills',
     icon: 'globe',
     userSkillsPath: '~/.agents/skills',
     workspaceSkillsRelativePath: '.agents/skills',
@@ -332,3 +333,15 @@ export const BUILTIN_HARNESSES: Harness[] = [
     documentationUrl: 'https://antigravity.google/docs/skills',
   },
 ];
+
+/** Resolve built-in display names by ID so legacy stored names never leak into another language. */
+export function harnessDisplayName(harness: Pick<Harness, 'id' | 'name' | 'origin'>, translateName: typeof t = t): string {
+  if (harness.origin !== 'builtin') return harness.name;
+  if (harness.id === 'universal') return translateName('harness.universalName');
+  return BUILTIN_HARNESSES.find((builtin) => builtin.id === harness.id)?.name ?? harness.name;
+}
+
+export function harnessNameById(harnesses: Harness[], id: string): string {
+  const harness = harnesses.find((item) => item.id === id);
+  return harness ? harnessDisplayName(harness) : id;
+}

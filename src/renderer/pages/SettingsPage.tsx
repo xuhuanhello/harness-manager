@@ -1,7 +1,11 @@
+import { useT } from '../i18n';
+import { useAppInfo } from '../hooks/useAppInfo';
 import { Activity, Check, CircleHelp, Clock3, HardDrive, LoaderCircle, Plus, ShieldCheck, Store } from 'lucide-react';
 import HarnessSettingsPanel from '../components/HarnessSettingsPanel';
 import type { Harness, Marketplace, Snapshot, ViewMode } from '../../shared/types';
 import { modeItems } from '../format';
+import { AppUpdateSettings } from '../components/AppUpdate';
+import type { AppUpdateController } from '../hooks/useAppUpdate';
 
 export function SettingsPage({
   snapshot,
@@ -13,6 +17,9 @@ export function SettingsPage({
   onHealth,
   busy,
   onViewMode,
+  onLocale,
+  appUpdate,
+  onAutoCheck,
 }: {
   snapshot: Snapshot;
   onCreate: () => void;
@@ -23,22 +30,47 @@ export function SettingsPage({
   onHealth: () => void;
   busy: string;
   onViewMode: (mode: ViewMode) => void;
+  onLocale: (locale: Snapshot['settings']['locale']) => void;
+  appUpdate: AppUpdateController;
+  onAutoCheck: (value: boolean) => void;
 }) {
+  const t = useT();
+  const appInfo = useAppInfo();
   return (
     <div className="settings-page">
+      <AppUpdateSettings update={appUpdate} autoCheck={snapshot.settings.appUpdates?.autoCheck ?? true} onAutoCheck={onAutoCheck} />
       <section className="settings-section">
         <div className="settings-section-heading">
           <div>
-            <h2>分类偏好</h2>
-            <p>选择中央技能库打开时使用的分类视图。</p>
+            <h2>{t('settings.language')}</h2>
+            <p>{t('settings.languageDescription')}</p>
+          </div>
+        </div>
+        <select
+          className="form-input"
+          aria-label={t('settings.language')}
+          data-testid="language-select"
+          value={snapshot.settings.locale}
+          onChange={(event) => onLocale(event.target.value as Snapshot['settings']['locale'])}
+        >
+          <option value="system">{t('settings.followSystem')}</option>
+          <option value="zh-CN">{t('settings.simplifiedChinese')}</option>
+          <option value="en">English</option>
+        </select>
+      </section>
+      <section className="settings-section">
+        <div className="settings-section-heading">
+          <div>
+            <h2>{t('settings.defaultView')}</h2>
+            <p>{t('settings.chooseTheViewUsedWhenOpeningTheSkillLibrary')}</p>
           </div>
           <div className="settings-badge">
             <Clock3 size={13} />
-            已保存
+            {t('settings.saved')}
           </div>
         </div>
         <div className="preference-options">
-          {modeItems.map((item) => {
+          {modeItems().map((item) => {
             const Icon = item.icon;
             return (
               <button
@@ -53,12 +85,12 @@ export function SettingsPage({
                   <strong>{item.label}</strong>
                   <small>
                     {item.id === 'source'
-                      ? '从哪个仓库导入'
+                      ? t('settings.whereSkillsWereImportedFrom')
                       : item.id === 'harness'
-                        ? '每个 Harness 的用户级安装'
+                        ? t('settings.userInstallationsInEachHarness')
                         : item.id === 'group'
-                          ? '业务主题与集合'
-                          : '集中查看全部技能'}
+                          ? t('settings.topicsAndCollections')
+                          : t('settings.allSkillsInOnePlace')}
                   </small>
                 </span>
                 {snapshot.settings.viewMode === item.id && (
@@ -74,12 +106,12 @@ export function SettingsPage({
       <section className="settings-section">
         <div className="settings-section-heading">
           <div>
-            <h2>市场来源</h2>
-            <p>管理侧栏“市场”中的网站入口。</p>
+            <h2>{t('settings.marketplaceSources')}</h2>
+            <p>{t('settings.manageWebsiteLinksUnderMarketplaceInTheSidebar')}</p>
           </div>
           <button className="button subtle" data-testid="add-marketplace" onClick={onMarketplaceCreate}>
             <Plus size={15} />
-            添加市场
+            {t('settings.addMarketplace')}
           </button>
         </div>
         <div className="marketplace-settings-list">
@@ -92,7 +124,7 @@ export function SettingsPage({
                 <strong>
                   {marketplace.name}
                   <span className={`custom-pill ${marketplace.origin === 'builtin' ? 'builtin-pill' : ''}`}>
-                    {marketplace.origin === 'builtin' ? '内置' : '自定义'}
+                    {marketplace.origin === 'builtin' ? t('settings.builtIn') : t('settings.custom')}
                   </span>
                 </strong>
                 <code title={marketplace.url}>{marketplace.url}</code>
@@ -101,17 +133,17 @@ export function SettingsPage({
                 <div className="marketplace-settings-actions">
                   <button
                     className="button subtle compact"
-                    aria-label={`编辑 ${marketplace.name}`}
+                    aria-label={t('settings.edit', { name: marketplace.name })}
                     onClick={() => onMarketplaceEdit(marketplace)}
                   >
-                    编辑
+                    {t('settings.editAction')}
                   </button>
                   <button
                     className="button subtle compact marketplace-delete-button"
-                    aria-label={`删除 ${marketplace.name}`}
+                    aria-label={t('settings.delete', { name: marketplace.name })}
                     onClick={() => onMarketplaceRemove(marketplace)}
                   >
-                    删除
+                    {t('settings.deleteAction')}
                   </button>
                 </div>
               )}
@@ -120,18 +152,19 @@ export function SettingsPage({
         </div>
         <p className="settings-footnote">
           <ShieldCheck size={14} />
-          内置市场固定提供。添加的网址用于打开浏览器；导入仍支持 GitHub 仓库和 skills.sh 技能详情链接。
+          {t('settings.builtInMarketplacesAreAlwaysAvailableAddedUrlsOpenIn')}
         </p>
       </section>
       <HarnessSettingsPanel harnesses={snapshot.harnesses} onCreate={onCreate} onEdit={onEdit} />
       <section className="settings-section library-settings">
         <div className="settings-section-heading">
           <div>
-            <h2>中央技能库</h2>
-            <p>技能文件与管理数据保存在此目录。</p>
+            <h2>{t('settings.skillLibrary')}</h2>
+            <p>{t('settings.skillFilesAndManagementDataAreStoredHere')}</p>
           </div>
           <button className="button subtle" onClick={onHealth} disabled={busy === 'health'}>
-            {busy === 'health' ? <LoaderCircle size={14} className="spin" /> : <Activity size={14} />}检查安装
+            {busy === 'health' ? <LoaderCircle size={14} className="spin" /> : <Activity size={14} />}
+            {t('settings.checkInstallations')}
           </button>
         </div>
         <div className="library-path-card">
@@ -140,21 +173,21 @@ export function SettingsPage({
           </div>
           <div>
             <strong>{snapshot.libraryRoot}</strong>
-            <span>本机库位置 · 含 SQLite 管理数据与技能文件</span>
+            <span>{t('settings.localLibrarySqliteDataAndSkillFiles')}</span>
           </div>
           <span className="path-state">
             <span className="tiny-status" />
-            可用
+            {t('settings.available')}
           </span>
         </div>
         <div className="settings-footnote">
           <CircleHelp size={14} />
-          移动库和备份导出将在后续版本提供。
+          {t('settings.libraryRelocationAndBackupExportArePlannedForAFuture')}
         </div>
       </section>
       <footer className="settings-footer">
         <span>Harness Manager</span>
-        <span>本机技能管理 · 版本 M1</span>
+        <span>{t('settings.versionLabel', { version: appInfo ? `v${appInfo.version}` : '…' })}</span>
       </footer>
     </div>
   );

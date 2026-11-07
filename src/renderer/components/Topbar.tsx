@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { Activity, CheckCheck, ChevronLeft, Command, MoreHorizontal, Plus } from 'lucide-react';
 import type { Page } from '../view-types';
 
@@ -18,6 +19,7 @@ export function Topbar({
   onBeginSelection: () => void;
   onHealthCheck: () => void;
 }) {
+  const t = useT();
   return (
     <header className="topbar">
       <div className="breadcrumbs">
@@ -29,12 +31,12 @@ export function Topbar({
         {page === 'library' && (
           <button className="button primary top-add" onClick={onAddSource}>
             <Plus size={16} />
-            添加来源
+            {t('library.addSource')}
           </button>
         )}
         <button
           className="icon-button top-more"
-          aria-label="更多操作"
+          aria-label={t('library.moreActions')}
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen((open) => !open)}
         >
@@ -45,7 +47,7 @@ export function Topbar({
             {page === 'library' && (
               <button role="menuitem" onClick={onBeginSelection}>
                 <CheckCheck size={15} />
-                选择多个技能
+                {t('library.selectMultipleSkills')}
               </button>
             )}
             <button
@@ -56,10 +58,10 @@ export function Topbar({
               }}
             >
               <Activity size={15} />
-              检查安装健康
+              {t('library.checkInstallationHealth')}
             </button>
             <div className="action-menu-note">
-              <Command size={12} /> 搜索快捷键 ⌘K
+              <Command size={12} /> {t('library.searchShortcutK')}
             </div>
           </div>
         )}

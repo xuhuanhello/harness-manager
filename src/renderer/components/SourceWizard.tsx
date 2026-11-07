@@ -1,3 +1,5 @@
+import { formatList, quote } from '../i18n';
+import { useT } from '../i18n';
 import { candidateGroup } from '../../shared/candidate-groups';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -70,6 +72,7 @@ export function SourceWizard({
   onScan: () => void;
   onInstall: (options: SourceInstallOptions) => void;
 }) {
+  const t = useT();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [searchCollapsedGroups, setSearchCollapsedGroups] = useState<Set<string>>(new Set());
   const [confirmGroups, setConfirmGroups] = useState(false);
@@ -165,7 +168,7 @@ export function SourceWizard({
   };
   return (
     <div className="source-wizard">
-      <div className="source-type-tabs" role="tablist" aria-label="来源类型">
+      <div className="source-type-tabs" role="tablist" aria-label={t('library.sourceType')}>
         <button
           role="tab"
           aria-selected={mode === 'github'}
@@ -176,7 +179,7 @@ export function SourceWizard({
           }}
         >
           <Github size={15} />
-          GitHub 仓库
+          {t('library.githubRepository')}
         </button>
         <button
           role="tab"
@@ -188,7 +191,7 @@ export function SourceWizard({
           }}
         >
           <Folder size={15} />
-          本地目录
+          {t('library.localDirectory')}
         </button>
       </div>
       {!scan ? (
@@ -196,64 +199,66 @@ export function SourceWizard({
           {mode === 'github' ? (
             <>
               <label className="field-label">
-                仓库地址
+                {t('library.repositoryUrl')}
                 <input
                   autoFocus
                   data-testid="source-uri-input"
-                  aria-label="仓库地址"
+                  aria-label={t('library.repositoryUrl')}
                   className="form-input"
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
-                  placeholder="owner/repository 或 https://github.com/owner/repository"
+                  placeholder={t('library.ownerRepositoryOrHttpsGithubComOwnerRepository')}
                   onKeyDown={(event) => event.key === 'Enter' && input.trim() && onScan()}
                 />
               </label>
               <div className="two-fields">
                 <label className="field-label">
-                  分支或标签 <span className="optional">可选</span>
+                  {t('library.branchOrTag')}
+                  <span className="optional">{t('library.optional')}</span>
                   <input
                     className="form-input"
                     value={refValue}
                     onChange={(event) => setRefValue(event.target.value)}
-                    placeholder="默认分支"
+                    placeholder={t('library.defaultBranch')}
                   />
                 </label>
                 <label className="field-label">
-                  仓库子目录 <span className="optional">可选</span>
+                  {t('library.repositorySubdirectory')}
+                  <span className="optional">{t('library.optional')}</span>
                   <input
                     className="form-input"
                     value={subpath}
                     onChange={(event) => setSubpath(event.target.value)}
-                    placeholder="例如 skills/"
+                    placeholder={t('library.eGSkills')}
                   />
                 </label>
               </div>
               <div className="field-help info-help">
                 <ShieldCheck size={14} />
-                只读取仓库内容，不会执行其中的脚本。
+                {t('library.repositoryContentsAreReadWithoutRunningScripts')}
               </div>
             </>
           ) : (
             <>
               <label className="field-label">
-                本地技能目录
+                {t('library.localSkillDirectory')}
                 <input
                   autoFocus
                   data-testid="source-uri-input"
-                  aria-label="本地技能目录"
+                  aria-label={t('library.localSkillDirectory')}
                   className="form-input"
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
-                  placeholder="选择包含 SKILL.md 的目录"
+                  placeholder={t('library.chooseADirectoryContainingSkillMd')}
                 />
               </label>
               <button className="button subtle browse-button" onClick={onBrowse}>
                 <FolderOpen size={15} />
-                浏览本地目录
+                {t('library.browseLocalDirectories')}
               </button>
               <div className="field-help info-help">
                 <Folder size={14} />
-                可选择单个 Skill 目录，或包含多个技能的目录。
+                {t('library.chooseASingleSkillDirectoryOrADirectoryContainingMultiple')}
               </div>
             </>
           )}
@@ -261,16 +266,16 @@ export function SourceWizard({
             <div className="form-error">
               <CircleHelp size={14} />
               {error}
-              <button onClick={clearError}>关闭</button>
+              <button onClick={clearError}>{t('library.close')}</button>
             </div>
           )}
           <div className="dialog-footer spread">
             <button className="button subtle" onClick={onCancel} disabled={scanning}>
-              取消
+              {t('library.cancel')}
             </button>
             <button data-testid="scan-source" className="button primary" disabled={!input.trim() || scanning} onClick={onScan}>
               {scanning ? <LoaderCircle size={15} className="spin" /> : <Search size={15} />}
-              {scanning ? '正在扫描…' : '扫描技能'}
+              {scanning ? t('library.scanning') : t('library.scanSkills')}
             </button>
           </div>
         </>
@@ -281,9 +286,14 @@ export function SourceWizard({
               <Check size={17} />
             </div>
             <div>
-              <strong>扫描完成</strong>
+              <strong>{t('library.scanComplete')}</strong>
               <span>
-                {scan.source.label} · {scan.source.commit ? scan.source.commit.slice(0, 8) : mode === 'local' ? '本地目录' : '未记录版本'}
+                {scan.source.label} ·{' '}
+                {scan.source.commit
+                  ? scan.source.commit.slice(0, 8)
+                  : mode === 'local'
+                    ? t('library.localDirectory')
+                    : t('library.noVersionRecorded')}
               </span>
             </div>
             <button
@@ -294,13 +304,13 @@ export function SourceWizard({
                 setCandidateSearch('');
               }}
             >
-              重新扫描
+              {t('library.scanAgain')}
             </button>
           </div>
           <div className="candidate-toolbar">
             <div>
-              <strong>发现 {candidates.length} 个技能</strong>
-              <span>首次扫描默认不勾选；请选择要放入中央库的项目。</span>
+              <strong>{t('library.foundSkillCount', { count: candidates.length })}</strong>
+              <span>{t('library.nothingIsSelectedInitiallyChooseTheSkillsToImportInto')}</span>
             </div>
             <div className="candidate-actions">
               <ListActions
@@ -322,13 +332,13 @@ export function SourceWizard({
               <label className="candidate-search">
                 <Search size={12} />
                 <input
-                  aria-label="搜索扫描结果"
-                  placeholder="搜索候选技能"
+                  aria-label={t('library.searchScanResults')}
+                  placeholder={t('library.searchCandidateSkills')}
                   value={candidateSearch}
                   onChange={(event) => setCandidateSearch(event.target.value)}
                 />
                 {candidateSearch && (
-                  <button aria-label="清除候选搜索" onClick={() => setCandidateSearch('')}>
+                  <button aria-label={t('library.clearCandidateSearch')} onClick={() => setCandidateSearch('')}>
                     <X size={12} />
                   </button>
                 )}
@@ -347,7 +357,7 @@ export function SourceWizard({
                     <div className="candidate-group-heading">
                       <input
                         type="checkbox"
-                        aria-label={`选择分组 ${group}`}
+                        aria-label={t('library.selectGroup', { group: group })}
                         disabled={!selectable.length}
                         checked={selectable.length > 0 && count === selectable.length}
                         ref={(node) => {
@@ -384,7 +394,10 @@ export function SourceWizard({
                         <Folder size={14} />
                         <strong>{group}</strong>
                         <span>
-                          {members.length} 个技能 · 已选 {members.filter((candidate) => selected.has(candidate.id)).length}
+                          {t('library.skillSelectionCount', {
+                            count: members.length,
+                            selected: members.filter((candidate) => selected.has(candidate.id)).length,
+                          })}
                         </span>
                       </button>
                     </div>
@@ -410,34 +423,38 @@ export function SourceWizard({
             {!matching.length && (
               <div className="candidate-empty">
                 <Search size={20} />
-                <strong>{candidates.length ? '没有匹配的技能' : '没有发现技能'}</strong>
-                <span>检查目录或尝试其他关键词。</span>
+                <strong>{candidates.length ? t('library.noMatchingSkills') : t('library.noSkillsFound')}</strong>
+                <span>{t('library.checkTheDirectoryOrTryDifferentKeywords')}</span>
               </div>
             )}
           </div>
           {confirmGroups && (
-            <div className="detected-group-prompt" role="region" aria-label="创建识别分组">
-              <strong>{editingCustomGroup ? '为本次技能创建自定义分组' : '是否自动创建识别到的分组？'}</strong>
-              {!editingCustomGroup && <p>{selectedDetectedNames.join('、')}</p>}
+            <div className="detected-group-prompt" role="region" aria-label={t('library.createDetectedGroups')}>
+              <strong>
+                {editingCustomGroup ? t('library.createACustomGroupForTheseSkills') : t('library.createTheDetectedGroupsAutomatically')}
+              </strong>
+              {!editingCustomGroup && <p>{formatList(selectedDetectedNames)}</p>}
               <span>
                 {editingCustomGroup
-                  ? '只将本次成功安装的技能加入自定义分组；同名分组需要明确确认后才会合并。'
-                  : '根据仓库目录推断；只加入本次成功安装的技能。同名分组需要明确确认后才会合并。'}
+                  ? t('library.onlySkillsSuccessfullyImportedThisTimeWillBeAddedTo')
+                  : t('library.groupsAreInferredFromRepositoryDirectoriesAndContainOnlySkills')}
               </span>
               {!editingCustomGroup && detectedGroupConflicts.length > 0 && (
-                <div className="form-warning">已存在同名分组：{detectedGroupConflicts.map((group) => `“${group.name}”`).join('、')}。</div>
+                <div className="form-warning">
+                  {t('library.duplicateGroups', { names: formatList(detectedGroupConflicts.map((group) => quote(group.name))) })}
+                </div>
               )}
               {detectedMergeConfirmation && detectedGroupConflicts.length > 0 ? (
                 <>
                   <div className="form-warning" role="alert">
-                    确认后会将本次成功安装的技能合并到上述分组；没有同名分组的识别名称会新建分组。
+                    {t('library.skillsImportedThisTimeWillBeMergedIntoTheGroups')}
                   </div>
                   <div>
                     <button className="button subtle" disabled={installing || scanning} onClick={() => setDetectedMergeConfirmation(false)}>
-                      返回
+                      {t('library.back')}
                     </button>
                     <button className="button subtle" disabled={!selected.size || installing || scanning} onClick={() => onInstall({})}>
-                      仅安装技能
+                      {t('library.importSkillsOnly')}
                     </button>
                     <button
                       className="button subtle"
@@ -448,25 +465,25 @@ export function SourceWizard({
                         setCustomGroupName('');
                       }}
                     >
-                      换个名称创建新分组
+                      {t('library.useADifferentGroupName')}
                     </button>
                     <button
                       className="button primary"
                       disabled={!selected.size || installing || scanning}
                       onClick={() => onInstall({ createDetectedGroups: true, mergeExistingGroups: true })}
                     >
-                      合并到已有分组
+                      {t('library.mergeIntoExistingGroup')}
                     </button>
                   </div>
                 </>
               ) : editingCustomGroup ? (
                 <>
                   <label className="field-label">
-                    自定义分组名称
+                    {t('library.customGroupName')}
                     <input
                       ref={customGroupInputRef}
                       autoFocus
-                      aria-label="自定义分组名称"
+                      aria-label={t('library.customGroupName')}
                       className="form-input"
                       maxLength={80}
                       value={customGroupName}
@@ -474,7 +491,7 @@ export function SourceWizard({
                         setCustomGroupName(event.target.value);
                         setCustomMergeConfirmation(false);
                       }}
-                      placeholder="输入分组名称"
+                      placeholder={t('library.enterAGroupName')}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
                           event.preventDefault();
@@ -483,10 +500,12 @@ export function SourceWizard({
                       }}
                     />
                   </label>
-                  {customGroupConflict && <div className="form-warning">已存在同名分组“{customGroupConflict.name}”。</div>}
+                  {customGroupConflict && (
+                    <div className="form-warning">{t('library.duplicateGroup', { name: customGroupConflict.name })}</div>
+                  )}
                   {customMergeConfirmation && customGroupConflict && (
                     <div className="form-warning" role="alert">
-                      是否将本次成功安装的技能合并到“{customGroupConflict.name}”？
+                      {t('library.mergeGroupQuestion', { name: customGroupConflict.name })}
                     </div>
                   )}
                   <div>
@@ -498,14 +517,14 @@ export function SourceWizard({
                         setCustomMergeConfirmation(false);
                       }}
                     >
-                      返回
+                      {t('library.back')}
                     </button>
                     <button
                       className="button primary"
                       disabled={!selected.size || !customGroupName.trim() || installing || scanning}
                       onClick={submitCustomGroup}
                     >
-                      安装并加入自定义分组
+                      {t('library.importAndAddToCustomGroup')}
                     </button>
                   </div>
                   {customMergeConfirmation && customGroupConflict && (
@@ -515,7 +534,7 @@ export function SourceWizard({
                         disabled={!selected.size || installing || scanning}
                         onClick={() => onInstall({ customGroupName: customGroupName.trim(), mergeExistingGroups: true })}
                       >
-                        合并到已有分组
+                        {t('library.mergeIntoExistingGroup')}
                       </button>
                       <button
                         className="button subtle"
@@ -526,7 +545,7 @@ export function SourceWizard({
                           customGroupInputRef.current?.select();
                         }}
                       >
-                        换个名称创建新分组
+                        {t('library.useADifferentGroupName')}
                       </button>
                     </div>
                   )}
@@ -534,10 +553,10 @@ export function SourceWizard({
               ) : (
                 <div>
                   <button className="button subtle" disabled={!selected.size || installing || scanning} onClick={() => onInstall({})}>
-                    仅安装技能
+                    {t('library.importSkillsOnly')}
                   </button>
                   <button className="button primary" disabled={!selected.size || installing || scanning} onClick={requestDetectedGroups}>
-                    安装并创建分组
+                    {t('library.importAndCreateGroups')}
                   </button>
                   <button
                     className="button subtle"
@@ -547,7 +566,7 @@ export function SourceWizard({
                       setCustomMergeConfirmation(false);
                     }}
                   >
-                    自定义分组
+                    {t('library.customGroup')}
                   </button>
                 </div>
               )}
@@ -558,14 +577,14 @@ export function SourceWizard({
             <div className="form-error">
               <CircleHelp size={14} />
               {error}
-              <button onClick={clearError}>关闭</button>
+              <button onClick={clearError}>{t('library.close')}</button>
             </div>
           )}
           <div className="dialog-footer spread">
             <button className="button subtle" onClick={onCancel} disabled={installing}>
-              取消
+              {t('library.cancel')}
             </button>
-            <span className="muted-caption">已选择 {selected.size} 项</span>
+            <span className="muted-caption">{t('common.selectedCount', { count: selected.size })}</span>
             <button
               data-testid="install-selected-candidates"
               className="button primary"
@@ -580,7 +599,7 @@ export function SourceWizard({
               }}
             >
               {installing ? <LoaderCircle size={15} className="spin" /> : <ArrowDownToLine size={15} />}
-              {installing ? '正在安装…' : `安装所选技能 (${selected.size})`}
+              {installing ? t('library.importing') : t('library.importSelectedSkills', { size: selected.size })}
             </button>
           </div>
         </>
@@ -600,6 +619,7 @@ export function CandidateRow({
   disabled: boolean;
   onToggle: () => void;
 }) {
+  const t = useT();
   return (
     <label className={`candidate-row ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}`}>
       <input type="checkbox" checked={checked} disabled={disabled} onChange={onToggle} />
@@ -608,26 +628,27 @@ export function CandidateRow({
       </span>
       <span className="candidate-copy">
         <strong>{candidate.name}</strong>
-        <span>{candidate.description || '暂无描述。'}</span>
+        <span>{candidate.description || t('library.noDescription')}</span>
         <small>
           <FileCode2 size={11} />
           {candidate.path}
         </small>
       </span>
       {candidate.installed ? (
-        <span className="candidate-status installed">已安装</span>
+        <span className="candidate-status installed">{t('library.installed')}</span>
       ) : candidate.issues.length ? (
         <span className="candidate-status issue" title={candidate.issues.join('\n')}>
-          需检查
+          {t('library.needsReview')}
         </span>
       ) : (
-        <span className="candidate-status ready">可安装</span>
+        <span className="candidate-status ready">{t('library.readyToImport')}</span>
       )}
     </label>
   );
 }
 
 export function InstallResults({ result, onDone }: { result: BatchResult; onDone: () => void }) {
+  const t = useT();
   const succeeded = result.items.filter((item) => item.status === 'success').length;
   return (
     <>
@@ -636,10 +657,8 @@ export function InstallResults({ result, onDone }: { result: BatchResult; onDone
           <Check size={17} />
         </span>
         <div>
-          <strong>安装处理完成</strong>
-          <span>
-            {succeeded} 项成功 · {result.items.length - succeeded} 项需留意
-          </span>
+          <strong>{t('library.importFinished')}</strong>
+          <span>{t('common.completedSummary', { succeeded, attention: result.items.length - succeeded })}</span>
         </div>
       </div>
       <div className="result-list">
@@ -651,7 +670,12 @@ export function InstallResults({ result, onDone }: { result: BatchResult; onDone
             <div>
               <strong>{item.label}</strong>
               <span>
-                {item.message || (item.status === 'success' ? '已加入中央技能库' : item.status === 'skipped' ? '已跳过' : '安装失败')}
+                {item.message ||
+                  (item.status === 'success'
+                    ? t('library.addedToSkillLibrary')
+                    : item.status === 'skipped'
+                      ? t('library.skippedStatus')
+                      : t('library.importFailed'))}
               </span>
             </div>
           </div>
@@ -659,7 +683,8 @@ export function InstallResults({ result, onDone }: { result: BatchResult; onDone
       </div>
       <div className="dialog-footer">
         <button className="button primary" onClick={onDone}>
-          继续 <ArrowRight size={15} />
+          {t('library.continue')}
+          <ArrowRight size={15} />
         </button>
       </div>
     </>

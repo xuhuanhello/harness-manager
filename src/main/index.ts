@@ -1,14 +1,32 @@
-import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell } from 'electron';
+import { t } from '../shared/i18n';
+import { app, BrowserWindow, dialog, ipcMain, net, powerMonitor, shell } from 'electron';
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { AppError, errorMessage, type IpcResult } from '../shared/errors';
-import { CHANGED_CHANNEL, INVOKE_CHANNEL, isAction } from '../shared/ipc-actions';
+import { APP_UPDATE_CHANNEL, CHANGED_CHANNEL, INVOKE_CHANNEL, isAction } from '../shared/ipc-actions';
 import { Controller } from './controller';
+import { resolveLocale, setLocaleResolver } from '../shared/i18n';
+import type { Settings } from '../shared/types';
 import { appError } from './messages';
+import { AppUpdater } from './app-updater';
+import { installMacUpdate, macLocationReason, spawnDetached } from './app-update-install';
+import { writeFile } from 'node:fs/promises';
 let controller: Controller | undefined;
 let window: BrowserWindow | null = null;
 let quitting = false;
+const systemLocale = () =>
+  resolveLocale(
+    'system',
+    process.env.HARNESS_SYSTEM_LOCALE
+      ? [process.env.HARNESS_SYSTEM_LOCALE]
+      : !app.isReady()
+        ? [process.env.LANG ?? 'en']
+        : app.getPreferredSystemLanguages().length
+          ? app.getPreferredSystemLanguages()
+          : [app.getLocale()],
+  );
+setLocaleResolver(() => resolveLocale(controller?.store.get<Settings>('settings', 'ui')?.locale, [systemLocale()]));
 // Keep the library location stable between electron . and the named packaged app.
 app.setPath('userData', path.join(app.getPath('appData'), 'harness-manager'));
 if (process.env.HARNESS_PROFILE_ROOT) {
@@ -28,7 +46,29 @@ else {
     .whenReady()
     .then(async () => {
       const root = process.env.HARNESS_LIBRARY_ROOT || path.join(app.getPath('userData'), 'library');
+      const updater = new AppUpdater({
+        version: app.getVersion(),
+        platform: process.platform,
+        arch: process.arch,
+        isPackaged: app.isPackaged,
+        userData: app.getPath('userData'),
+        env: process.env,
+        fetch: (url, init) => net.fetch(url instanceof URL ? url.href : url, init),
+        locationReason: () => macLocationReason(process.execPath),
+        install: async (file, version) => {
+          await writeFile(path.join(app.getPath('userData'), 'updates', 'pending-version'), version, { mode: 0o600 });
+          if (process.platform === 'darwin') await installMacUpdate(file, version, process.execPath, updater.updatesRoot);
+          else await spawnDetached(file, ['/S', '--updated', '--force-run']);
+        },
+        quit: () => app.quit(),
+        openExternal: (url) => shell.openExternal(url),
+        changed: (state) => {
+          if (window && !window.webContents.isDestroyed()) window.webContents.send(APP_UPDATE_CHANNEL, state);
+        },
+      });
       controller = new Controller(root, () => window?.webContents.send(CHANGED_CHANNEL), {
+        appUpdater: updater,
+        appInfo: { version: app.getVersion(), platform: process.platform, systemLocale: systemLocale() },
         ports: {
           chooseDirectory: async () => {
             if (!window) return null;
@@ -41,6 +81,8 @@ else {
         },
       });
       await controller.initialize();
+      await updater.initialize();
+      updater.setAutoCheck(controller.store.get<Settings>('settings', 'ui')?.appUpdates?.autoCheck ?? true);
       const rendererPath = path.join(__dirname, '../renderer/index.html');
       const trustedUrl = devUrl ?? pathToFileURL(rendererPath).href;
       ipcMain.handle(INVOKE_CHANNEL, async (event, action: unknown, payload: unknown): Promise<IpcResult<unknown>> => {
@@ -91,7 +133,7 @@ else {
       });
     })
     .catch((error) => {
-      dialog.showErrorBox('Harness Manager 启动失败', String(error));
+      dialog.showErrorBox(t('library.harnessManagerCouldNotStart'), String(error));
       app.quit();
     });
   app.on('window-all-closed', () => {

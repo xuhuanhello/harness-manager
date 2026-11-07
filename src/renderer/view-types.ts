@@ -29,7 +29,15 @@ export type ApplyMode = 'group' | 'harness';
 
 export type ApplyDraft = { mode: ApplyMode; scope: Scope; harnessIds: string[]; workspacePath: string; strategy: 'symlink' | 'copy' };
 
-export type RemovalDraft = { bindingId: string; harnessName: string; skillIds: string[]; skillNames: string[] };
+export type RemovalDraft = {
+  harnessName: string;
+  parts: { bindingId: string; skillIds: string[] }[];
+  skills: { id: string; name: string }[];
+  scopeLabel: string;
+  sharedNotes?: string[];
+  sharedCount?: number;
+  origin: 'library' | 'workspace';
+};
 
 export type SourceInstallOptions = { createDetectedGroups?: boolean; customGroupName?: string; mergeExistingGroups?: boolean };
 

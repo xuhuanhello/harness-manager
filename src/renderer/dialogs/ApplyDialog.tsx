@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { ArrowDownToLine, ArrowRight, Check, CirclePlus, FolderOpen, HardDrive, LoaderCircle, Tag } from 'lucide-react';
 import type { Snapshot } from '../../shared/types';
 import { ApplyPreview, ApplyResults } from '../components/ApplyFlow';
@@ -24,6 +25,7 @@ export function ApplyDialog({
   draft: GroupDraft;
   onAddHarness: () => void;
 }) {
+  const t = useT();
   const { busy, error, setError } = shell;
   const { draft, plan, results, update } = apply;
   const { selected } = view;
@@ -32,8 +34,12 @@ export function ApplyDialog({
   return (
     <ModalShell
       locked={!!busy}
-      title={results ? '应用结果' : '应用所选技能'}
-      subtitle={results ? '每个技能和目标的执行结果。' : `已选择 ${selected.size} 个不同技能。先选择分组或安装目标。`}
+      title={results ? t('dialogs.applyResults') : t('dialogs.applySelectedSkills')}
+      subtitle={
+        results
+          ? t('dialogs.resultsForEachSkillAndDestination')
+          : t('dialogs.distinctSkillsSelectedChooseAGroupOrInstallationDestination', { size: selected.size })
+      }
       onClose={() => shell.setDialog(null)}
       size="wide"
     >
@@ -41,7 +47,7 @@ export function ApplyDialog({
         <ApplyResults result={results} onDone={apply.finish} />
       ) : (
         <>
-          <div className="apply-mode-tabs" role="tablist" aria-label="应用操作类型">
+          <div className="apply-mode-tabs" role="tablist" aria-label={t('dialogs.applyAction')}>
             <button
               role="tab"
               aria-selected={draft.mode === 'harness'}
@@ -49,7 +55,7 @@ export function ApplyDialog({
               onClick={() => update({ mode: 'harness' })}
             >
               <ArrowDownToLine size={15} />
-              应用到 Harness
+              {t('dialogs.applyToHarness')}
             </button>
             <button
               role="tab"
@@ -58,24 +64,24 @@ export function ApplyDialog({
               onClick={() => update({ mode: 'group' })}
             >
               <Tag size={15} />
-              加入业务分组
+              {t('dialogs.addToGroup')}
             </button>
           </div>
           {draft.mode === 'group' ? (
             <div className="apply-panel">
-              <div className="field-help">分组只保存这次选择的成员关系，不会改变来源或安装位置。</div>
+              <div className="field-help">{t('dialogs.groupsStoreMembershipOnlySourceAndInstallationLocationsStayThe')}</div>
               <GroupPicker
                 groups={snapshot.groups}
                 draft={groupDraft}
-                selectLabel="选择已有分组"
-                separator="或创建分组"
-                nameLabel="新分组名称"
-                placeholder="例如：客户支持"
+                selectLabel={t('dialogs.chooseAnExistingGroup')}
+                separator={t('dialogs.orCreateAGroup')}
+                nameLabel={t('dialogs.newGroupName')}
+                placeholder={t('dialogs.eGCustomerSupport')}
               />
               {snapshot.groups.map((group) =>
                 group.name.toLocaleLowerCase() === groupDraft.name.trim().toLocaleLowerCase() && groupDraft.name.trim() ? (
                   <div className="form-warning" key={group.id}>
-                    已有同名分组“{group.name}”，请选择它以避免重复。
+                    {t('dialogs.duplicateGroup', { name: group.name })}
                   </div>
                 ) : null,
               )}
@@ -85,13 +91,14 @@ export function ApplyDialog({
                   disabled={(!groupDraft.groupId && !groupDraft.name.trim()) || duplicateGroupName(groupDraft.name)}
                   onClick={() => void apply.saveToGroup()}
                 >
-                  {busy === 'group' ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}确认加入 {selected.size} 项
+                  {busy === 'group' ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}
+                  {t('dialogs.groupSelection', { count: selected.size })}
                 </button>
               </div>
             </div>
           ) : (
             <div className="apply-panel">
-              <div className="scope-switch" role="radiogroup" aria-label="安装作用域">
+              <div className="scope-switch" role="radiogroup" aria-label={t('dialogs.installationScope')}>
                 <button
                   role="radio"
                   aria-checked={draft.scope === 'user'}
@@ -100,8 +107,8 @@ export function ApplyDialog({
                 >
                   <HardDrive size={16} />
                   <span>
-                    <strong>用户级</strong>
-                    <small>对当前用户可用</small>
+                    <strong>{t('dialogs.user')}</strong>
+                    <small>{t('dialogs.availableToTheCurrentUser')}</small>
                   </span>
                 </button>
                 <button
@@ -112,15 +119,15 @@ export function ApplyDialog({
                 >
                   <FolderOpen size={16} />
                   <span>
-                    <strong>工作区级</strong>
-                    <small>仅配置指定工作目录</small>
+                    <strong>{t('dialogs.workspace')}</strong>
+                    <small>{t('dialogs.onlyInTheChosenWorkingDirectory')}</small>
                   </span>
                 </button>
               </div>
               {draft.scope === 'workspace' && (
                 <div className="workspace-path-field">
                   <label className="field-label" htmlFor="apply-workspace">
-                    工作目录
+                    {t('dialogs.workingDirectory')}
                   </label>
                   <div className="path-picker">
                     <FolderOpen size={16} />
@@ -128,29 +135,27 @@ export function ApplyDialog({
                       id="apply-workspace"
                       value={draft.workspacePath}
                       onChange={(event) => update({ workspacePath: event.target.value })}
-                      placeholder="选择本地工作目录"
+                      placeholder={t('dialogs.chooseALocalWorkingDirectory')}
                     />
                     <button className="button subtle" onClick={() => void apply.chooseWorkspace()}>
-                      浏览…
+                      {t('dialogs.browse')}
                     </button>
                   </div>
-                  <p className="field-help">工作区路径由你明确选择；应用不会自动切换到 Git 根目录。</p>
+                  <p className="field-help">{t('dialogs.theWorkspacePathIsYourExplicitChoiceTheAppDoes')}</p>
                 </div>
               )}
               <div className="harness-picker-heading">
                 <div>
-                  <span className="field-label">目标 Harness</span>
-                  <span className="field-help">可同时选择多个目标，实际共享目录会在预览中合并。</span>
+                  <span className="field-label">{t('dialogs.targetHarnesses')}</span>
+                  <span className="field-help">{t('dialogs.chooseMultipleDestinationsSharedDirectoriesAreCombinedInThePreview')}</span>
                 </div>
                 <button className="text-button" onClick={onAddHarness}>
                   <CirclePlus size={14} />
-                  添加自定义
+                  {t('dialogs.addCustom')}
                 </button>
               </div>
               <div className="harness-picker-grid">
-                {!snapshot.harnesses.length && (
-                  <p className="field-help">尚未启用 Harness，请先在设置中开启需要管理的工具，或添加自定义 Harness。</p>
-                )}
+                {!snapshot.harnesses.length && <p className="field-help">{t('dialogs.noHarnessesEnabledEnableToolsInSettingsOrAddA')}</p>}
                 {snapshot.harnesses
                   .filter((harness) => draft.scope === 'user' || harness.id !== 'universal')
                   .map((harness) => {
@@ -174,7 +179,7 @@ export function ApplyDialog({
                         <span className={`harness-icon ${harness.origin}`}>{harnessGlyph(harness.icon, harness.name)}</span>
                         <span className="harness-choice-copy">
                           <strong>{harness.name}</strong>
-                          <small title={path || '此作用域不可用'}>{path || '未配置此作用域'}</small>
+                          <small title={path || t('dialogs.unavailableInThisScope')}>{path || t('dialogs.scopeNotConfigured')}</small>
                         </span>
                         <span className="choice-check">{checked && <Check size={12} />}</span>
                       </button>
@@ -183,15 +188,15 @@ export function ApplyDialog({
               </div>
               <div className="advanced-row">
                 <div>
-                  <strong>安装策略</strong>
-                  <span>链接保持中央库与 Harness 同步；复制可显式用于兼容。</span>
+                  <strong>{t('dialogs.installationStrategy')}</strong>
+                  <span>{t('dialogs.linksKeepHarnessesInSyncWithTheLibraryChooseA')}</span>
                 </div>
                 <div className="strategy-toggle">
                   <button className={draft.strategy === 'symlink' ? 'active' : ''} onClick={() => update({ strategy: 'symlink' })}>
-                    软链
+                    {t('dialogs.symlink')}
                   </button>
                   <button className={draft.strategy === 'copy' ? 'active' : ''} onClick={() => update({ strategy: 'copy' })}>
-                    复制
+                    {t('dialogs.copy')}
                   </button>
                 </div>
               </div>
@@ -205,7 +210,8 @@ export function ApplyDialog({
                     }
                     onClick={() => void apply.preview()}
                   >
-                    {busy === 'preview' ? <LoaderCircle size={15} className="spin" /> : <ArrowRight size={15} />}预览安装目标
+                    {busy === 'preview' ? <LoaderCircle size={15} className="spin" /> : <ArrowRight size={15} />}
+                    {t('dialogs.previewDestinations')}
                   </button>
                 </div>
               )}

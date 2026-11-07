@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { useState } from 'react';
 import type { HarnessAPI } from '../../shared/ipc-contract';
 import type { LibraryData } from './useLibraryData';
@@ -5,6 +6,7 @@ import type { Shell } from './useShell';
 
 /** Choosing an existing group or naming a new one, used after an import and when grouping a selection. */
 export function useGroupDraft(api: HarnessAPI | undefined, shell: Shell, data: LibraryData) {
+  const t = useT();
   const [onboardingIds, setOnboardingIds] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [groupId, setGroupId] = useState('');
@@ -38,7 +40,7 @@ export function useGroupDraft(api: HarnessAPI | undefined, shell: Shell, data: L
       await api.saveGroup(request(onboardingIds));
       await data.refresh();
       closeOnboarding();
-      shell.setToast('技能分组已更新。');
+      shell.setToast(t('library.skillGroupsUpdated'));
     });
 
   return { onboardingIds, name, groupId, chooseGroup, typeName, reset, request, openOnboarding, closeOnboarding, saveOnboarding };

@@ -38,4 +38,12 @@ export const MIGRATIONS: readonly StoreMigration[] = [
       }
     },
   },
+  {
+    version: 4,
+    description: 'Default existing language preferences to the system language.',
+    up(store) {
+      const settings = store.get<{ id: string; locale?: string }>('settings', 'ui');
+      if (settings && settings.locale === undefined) store.put('settings', { ...settings, locale: 'system' });
+    },
+  },
 ];

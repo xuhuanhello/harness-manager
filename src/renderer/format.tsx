@@ -1,16 +1,17 @@
+import { t } from './i18n';
 import { Boxes, Code2, FolderTree, Layers3, Sparkles, Tag } from 'lucide-react';
 import type { Snapshot, ViewMode } from '../shared/types';
 
 /** Small display helpers shared across pages. */
-export const modeItems: { id: ViewMode; label: string; icon: typeof Layers3 }[] = [
-  { id: 'source', label: '按来源', icon: FolderTree },
-  { id: 'harness', label: '按 Harness', icon: Boxes },
-  { id: 'group', label: '按分组', icon: Tag },
-  { id: 'flat', label: '平铺', icon: Layers3 },
+export const modeItems = (): { id: ViewMode; label: string; icon: typeof Layers3 }[] => [
+  { id: 'source', label: t('library.bySource'), icon: FolderTree },
+  { id: 'harness', label: t('library.byHarness'), icon: Boxes },
+  { id: 'group', label: t('library.byGroup'), icon: Tag },
+  { id: 'flat', label: t('library.allSkills'), icon: Layers3 },
 ];
 
 export function sourceName(snapshot: Snapshot, id: string) {
-  return snapshot.sources.find((source) => source.id === id)?.label || '未知来源';
+  return snapshot.sources.find((source) => source.id === id)?.label || t('library.unknownSource');
 }
 
 export function initial(name: string) {
@@ -29,10 +30,8 @@ export function harnessGlyph(icon: string, name: string): React.ReactNode {
   return initial(name);
 }
 
-export function formatCount(value: number, noun = '项') {
-  return `${value} ${noun}`;
-}
+export { formatCount } from './i18n';
 
 export function modeTitle(mode: ViewMode) {
-  return modeItems.find((item) => item.id === mode)?.label ?? '按来源';
+  return modeItems().find((item) => item.id === mode)?.label ?? t('library.bySource');
 }

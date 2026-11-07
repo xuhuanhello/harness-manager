@@ -1,3 +1,6 @@
+import { formatList } from '../i18n';
+import { compareNames, formatDateTime } from '../i18n';
+import { t, useT } from '../i18n';
 import { useState } from 'react';
 import {
   ArrowLeft,
@@ -39,9 +42,9 @@ function TriCheckbox({ ids, selected, label, onToggle }: { ids: string[]; select
 function checkedAtLabel(date: Date | null) {
   if (!date) return '';
   const minutes = Math.round((Date.now() - date.getTime()) / 60_000);
-  if (minutes < 1) return '刚刚检查';
-  if (minutes < 60) return `${minutes} 分钟前检查`;
-  return `${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 检查`;
+  if (minutes < 1) return t('library.checkedJustNow');
+  if (minutes < 60) return t('library.checkedMinutesAgo', { minutes: minutes });
+  return t('library.checkedAt', { value: formatDateTime(date, { hour: '2-digit', minute: '2-digit' }) });
 }
 
 const applicableIds = (entries: UpdateEntry[]) => entries.filter((entry) => !entry.blocked).map((entry) => entry.skillId);
@@ -58,6 +61,7 @@ export function UpdatesView({
   search: string;
   onClearSearch: () => void;
 }) {
+  const t = useT();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const query = search.trim().toLocaleLowerCase();
   const visible = updates.sources
@@ -78,20 +82,29 @@ export function UpdatesView({
 
   return (
     <>
-      <section className="update-summary" aria-label="可更新技能概览">
+      <section className="update-summary" aria-label={t('library.skillUpdatesOverview')}>
         <div className="update-summary-icon">
           <CircleArrowUp size={18} />
         </div>
         <div className="update-summary-copy">
-          <strong>{updates.count ? `${formatCount(updates.count, '个技能')}有上游更新` : `${blockedCount} 项上游变化需要手动处理`}</strong>
+          <strong>
+            {updates.count
+              ? t('library.upstreamUpdateCount', { count: updates.count })
+              : t('library.upstreamChangesNeedManualAttention', { blockedCount: blockedCount })}
+          </strong>
           <span>
-            来自 {sourceCount} 个来源 · {checkedAtLabel(updates.lastCheckedAt)}
-            {updates.count > 0 && blockedCount > 0 && ` · ${blockedCount} 项需要手动处理`}
+            {updates.count > 0 && blockedCount > 0
+              ? t('library.updateSourceSummaryWithAttention', {
+                  count: sourceCount,
+                  checkedAt: checkedAtLabel(updates.lastCheckedAt),
+                  blocked: blockedCount,
+                })
+              : t('library.updateSourceSummary', { count: sourceCount, checkedAt: checkedAtLabel(updates.lastCheckedAt) })}
           </span>
         </div>
         <div className="update-summary-note">
           <Info size={13} />
-          <span>更新会替换中央库中的内容；软链接安装立即使用新版本，副本安装需重新应用以同步。</span>
+          <span>{t('library.updatesReplaceLibraryContentSymlinkInstallsUseTheNewVersion')}</span>
         </div>
       </section>
 
@@ -99,18 +112,16 @@ export function UpdatesView({
         <div className="update-notice" role="status">
           <TriangleAlert size={14} />
           <div>
-            <strong>{updates.failures.length} 个来源无法检查更新</strong>
+            <strong>{t('library.failedSourceCount', { count: updates.failures.length })}</strong>
             {updates.failures.map((item) => (
-              <span key={item.source.id}>
-                {item.source.label}：{item.error}
-              </span>
+              <span key={item.source.id}>{t('common.namedDetail', { name: item.source.label, detail: item.error || '' })}</span>
             ))}
           </div>
         </div>
       )}
 
       <div className="content-meta">
-        <span>按来源查看可更新的技能；默认选中没有本地修改的更新。</span>
+        <span>{t('library.viewUpdatesBySourceSkillsWithoutLocalChangesAreSelected')}</span>
         <div className="content-meta-actions">
           <ListActions
             allExpanded={allExpanded}
@@ -123,9 +134,9 @@ export function UpdatesView({
           <span className="content-result-count">
             {formatCount(
               visible.reduce((total, item) => total + item.entries.length, 0),
-              '项',
+              'item',
             )}
-            {search ? ' · 搜索结果' : ''}
+            {search ? t('library.searchResults') : ''}
           </span>
         </div>
       </div>
@@ -133,10 +144,10 @@ export function UpdatesView({
       {visible.length === 0 ? (
         <div className="empty-search">
           <Search size={20} />
-          <strong>没有匹配的更新</strong>
-          <span>试试其他关键词，或清除搜索条件。</span>
+          <strong>{t('library.noMatchingUpdates')}</strong>
+          <span>{t('library.tryDifferentKeywordsOrClearTheSearch')}</span>
           <button className="button subtle" onClick={onClearSearch}>
-            清除搜索
+            {t('library.clearSearch')}
           </button>
         </div>
       ) : (
@@ -180,11 +191,12 @@ function UpdateSourceSection({
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
+  const t = useT();
   const { source, entries, missing, commit } = item;
   const ids = applicableIds(entries);
   const selectedCount = ids.filter((id) => updates.selected.has(id)).length;
   const categories = [...new Set(entries.map((entry) => entry.category))].sort((left, right) =>
-    !left ? 1 : !right ? -1 : left.localeCompare(right),
+    !left ? 1 : !right ? -1 : compareNames(left, right),
   );
   const rows = (members: UpdateEntry[]) =>
     members.map((entry) => (
@@ -202,13 +214,13 @@ function UpdateSourceSection({
         <TriCheckbox
           ids={ids}
           selected={updates.selected}
-          label={`选择${source.label}中的 ${ids.length} 个更新`}
+          label={t('library.selectUpdatesIn', { label: source.label, count: ids.length })}
           onToggle={() => updates.toggleMany(ids)}
         />
         <button
           className="section-collapse"
           aria-expanded={!collapsed}
-          aria-label={`${collapsed ? '展开' : '折叠'}${source.label}`}
+          aria-label={`${collapsed ? t('library.expand') : t('library.collapse')}${source.label}`}
           onClick={onToggleCollapsed}
         >
           <ChevronDown size={15} className={collapsed ? 'collapsed' : ''} />
@@ -216,17 +228,17 @@ function UpdateSourceSection({
         <span className="section-kind-icon source">{source.type === 'github' ? <Github size={15} /> : <Folder size={15} />}</span>
         <strong>{source.label}</strong>
         <span className="section-count">
-          {ids.length} 项可更新{entries.length > ids.length && ` · ${entries.length - ids.length} 项需手动处理`}
+          {entries.length > ids.length
+            ? t('library.updateCounts', { count: ids.length, blocked: entries.length - ids.length })
+            : t('library.availableUpdateCount', { count: ids.length })}
         </span>
         {commit && (
-          <span className="update-commit" title={`上游提交 ${commit}`}>
+          <span className="update-commit" title={t('library.upstreamCommit', { commit: commit })}>
             <GitCommitHorizontal size={11} />
             {commit.slice(0, 7)}
           </span>
         )}
-        <span className="update-section-selected">
-          已选 {selectedCount}/{ids.length}
-        </span>
+        <span className="update-section-selected">{t('library.selectedFraction', { selected: selectedCount, count: ids.length })}</span>
       </div>
       {!collapsed && (
         <div className="skill-list">
@@ -240,13 +252,16 @@ function UpdateSourceSection({
                       <TriCheckbox
                         ids={memberIds}
                         selected={updates.selected}
-                        label={`选择分组 ${category || '根目录'}`}
+                        label={t('library.selectUpdateGroup', { value: category || t('library.rootDirectory') })}
                         onToggle={() => updates.toggleMany(memberIds)}
                       />
                       <FolderTree size={13} />
-                      <strong>{category || '根目录'}</strong>
+                      <strong>{category || t('library.rootDirectory')}</strong>
                       <span>
-                        {members.length} 项 · 已选 {memberIds.filter((id) => updates.selected.has(id)).length}
+                        {t('library.itemSelectionCount', {
+                          count: members.length,
+                          selected: memberIds.filter((id) => updates.selected.has(id)).length,
+                        })}
                       </span>
                     </div>
                     {rows(members)}
@@ -257,9 +272,7 @@ function UpdateSourceSection({
           {showMissing && missing.length > 0 && (
             <div className="update-missing">
               <CircleAlert size={13} />
-              <span>
-                {missing.length} 个技能在上游已不存在，中央库中的内容会保留：{missing.map((skill) => skill.name).join('、')}
-              </span>
+              <span>{t('library.missingSkills', { count: missing.length, names: formatList(missing.map((skill) => skill.name)) })}</span>
             </div>
           )}
         </div>
@@ -279,6 +292,7 @@ function UpdateRow({
   selected: boolean;
   onToggle: () => void;
 }) {
+  const t = useT();
   const distributions = snapshot.distributions.filter((item) => item.skillId === entry.skillId);
   const copies = distributions.filter((item) => item.strategy === 'copy').length;
   const groups = snapshot.groups.filter((group) => group.skillIds.includes(entry.skillId));
@@ -296,23 +310,25 @@ function UpdateRow({
         disabled={blocked}
         onChange={onToggle}
         onClick={(event) => event.stopPropagation()}
-        aria-label={`选择更新 ${entry.name}`}
+        aria-label={t('library.selectUpdateFor', { name: entry.name })}
       />
       <div className="skill-avatar">{initial(entry.name)}</div>
       <div className="skill-main">
         <div className="skill-name-line">
           <h3>{entry.name}</h3>
           {blocked ? (
-            <span className="update-pill blocked">需要手动处理</span>
+            <span className="update-pill blocked">{t('library.needsManualAttention')}</span>
           ) : entry.localModified ? (
-            <span className="update-pill modified" title="中央库中的内容在安装后被修改过；勾选后会用上游版本替换，修改移到废纸篓。">
-              本地已修改
+            <span className="update-pill modified" title={t('library.libraryContentHasChangedSinceImportSelectingThisSkillReplaces')}>
+              {t('library.locallyModified')}
             </span>
           ) : (
-            <span className="update-pill">可更新</span>
+            <span className="update-pill">{t('library.updates')}</span>
           )}
         </div>
-        <p className={blocked ? 'update-blocked-reason' : undefined}>{entry.blocked ?? (entry.description || '暂无描述。')}</p>
+        <p className={blocked ? 'update-blocked-reason' : undefined}>
+          {entry.blocked ?? (entry.description || t('library.noDescription'))}
+        </p>
         <div className="skill-tags">
           {groups.slice(0, 2).map((group) => (
             <span className="tag group-tag" key={group.id}>
@@ -321,7 +337,7 @@ function UpdateRow({
             </span>
           ))}
           {groups.length > 2 && <span className="tag">+{groups.length - 2}</span>}
-          {!blocked && descriptionChanged && <span className="tag update-tag">描述有变化</span>}
+          {!blocked && descriptionChanged && <span className="tag update-tag">{t('library.descriptionChanged')}</span>}
         </div>
       </div>
       <div className="skill-meta">
@@ -329,20 +345,23 @@ function UpdateRow({
           {distributions.length ? (
             <>
               <span className="tiny-status" />
-              已应用到 {distributions.length} 个目标
+              {t('library.appliedDestinationCount', { count: distributions.length })}
             </>
           ) : (
-            '仅在中央库'
+            t('library.libraryOnly')
           )}
         </span>
-        {!blocked && entry.localModified && selected && <span className="update-note warn">本地修改将移到废纸篓</span>}
-        {!blocked && copies > 0 && <span className="update-note">{copies} 个副本需重新应用</span>}
+        {!blocked && entry.localModified && selected && (
+          <span className="update-note warn">{t('library.localChangesWillMoveToTrash')}</span>
+        )}
+        {!blocked && copies > 0 && <span className="update-note">{t('library.copyCount', { count: copies })}</span>}
       </div>
     </article>
   );
 }
 
 export function UpdateDock({ updates }: { updates: Updates }) {
+  const t = useT();
   const count = updates.selectedIds.length;
   const replacing = updates.replacingModified.length;
   return (
@@ -352,20 +371,23 @@ export function UpdateDock({ updates }: { updates: Updates }) {
           <CircleArrowUp size={16} />
         </div>
         <div>
-          <strong>已选 {formatCount(count, '个更新')}</strong>
+          <strong>{t('library.selectedUpdateCount', { count })}</strong>
           <span className={replacing ? 'warn' : undefined}>
-            {replacing ? `其中 ${replacing} 项的本地修改将移到废纸篓` : `共 ${updates.count} 个可更新；本地修改过的技能需手动勾选`}
+            {replacing
+              ? t('library.localChangesInItemsWillMoveToTrash', { replacing: replacing })
+              : t('library.updatesAvailableSelectLocallyModifiedSkillsManually', { count: updates.count })}
           </span>
         </div>
       </div>
       <div className="dock-actions">
         <button className="button subtle" onClick={updates.leave}>
           <ArrowLeft size={14} />
-          返回技能库
+          {t('library.backToLibrary')}
         </button>
         <button data-testid="apply-updates" className="button primary" disabled={!count} onClick={updates.openConfirm}>
           <ArrowUpFromLine size={15} />
-          更新 <span className="button-count">{count}</span>
+          {t('library.update')}
+          <span className="button-count">{count}</span>
         </button>
       </div>
     </div>

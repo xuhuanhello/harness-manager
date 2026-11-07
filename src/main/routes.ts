@@ -1,7 +1,8 @@
 import type { Action } from '../shared/ipc-actions';
 import type { ActionOutput, ActionPayload } from '../shared/ipc-contract';
-import type { Harness } from '../shared/types';
+import type { Distribution, Harness } from '../shared/types';
 import type { Controller } from './controller';
+import { appError } from './messages';
 import { marketplaceSkillPageUrl } from './marketplace-catalog';
 
 export interface Route<K extends Action> {
@@ -18,6 +19,13 @@ const write = { queue: 'state', mutates: true } as const;
 const unqueued = { queue: 'none', mutates: false } as const;
 
 export const routes: { [K in Action]: Route<K> } = {
+  appUpdateState: { ...unqueued, handle: (app) => app.appUpdater.getState() },
+  checkAppUpdate: { ...unqueued, handle: (app) => app.appUpdater.check() },
+  downloadAppUpdate: { ...unqueued, handle: (app) => app.appUpdater.download() },
+  cancelAppUpdate: { ...unqueued, handle: (app) => app.appUpdater.cancel() },
+  installAppUpdate: { ...unqueued, handle: (app) => app.appUpdater.install() },
+  openAppUpdatePage: { ...unqueued, handle: (app, input) => app.appUpdater.openPage(input?.url) },
+  openAppUpdateSettings: { ...unqueued, handle: (app) => app.appUpdater.openManagement() },
   detectHarnessInstallations: { ...unqueued, handle: (app, input) => app.installation.detect(app.store.list<Harness>('harnesses'), input) },
   previewHarnessCleanup: { ...read, handle: (app, input) => app.installation.previewCleanup(input) },
   cleanupHarness: { ...write, handle: (app, input) => app.installation.cleanup(input) },
@@ -27,6 +35,23 @@ export const routes: { [K in Action]: Route<K> } = {
   },
   openSkillSource: { ...read, handle: (app, input) => app.ports.openExternal(app.locations.sourceUrl(input.skillId)) },
   revealSkill: { ...read, handle: async (app, input) => app.ports.showItemInFolder(await app.locations.directory(input.skillId)) },
+  revealExternalSkill: {
+    ...read,
+    handle: async (app, input) => {
+      const skill = (await app.external.externalSkills()).find((item) => item.id === input.externalSkillId);
+      if (!skill) throw appError('LOCATION_EXTERNAL_NOT_FOUND');
+      app.ports.showItemInFolder(skill.path);
+    },
+  },
+  revealDistribution: {
+    ...read,
+    handle: (app, input) => {
+      const distribution = app.store.get<Distribution>('distributions', input.distributionId);
+      if (!distribution) throw appError('LOCATION_DISTRIBUTION_NOT_FOUND');
+      app.ports.showItemInFolder(distribution.entryPath);
+    },
+  },
+  appInfo: { ...unqueued, handle: (app) => app.appInfo },
   snapshot: { ...read, handle: (app) => app.snapshot() },
   migrationRepairs: { ...read, handle: (app, input) => app.repair.preview(input) },
   repairManagedLink: { ...write, handle: (app, input) => app.repair.repair(input) },
@@ -60,6 +85,12 @@ export const routes: { [K in Action]: Route<K> } = {
   apply: { ...write, handle: (app, input) => app.distribution.apply(input) },
   remove: { ...write, handle: (app, input) => app.distribution.remove(input) },
   checkHealth: { ...write, handle: (app) => app.health.checkHealth() },
-  saveSettings: { ...write, handle: (app, input) => app.library.saveSettings(input) },
+  saveSettings: {
+    ...write,
+    handle: (app, input) => {
+      app.library.saveSettings(input);
+      if (input.appUpdates) app.appUpdater.setAutoCheck(input.appUpdates.autoCheck);
+    },
+  },
   chooseDirectory: { ...unqueued, handle: (app) => app.ports.chooseDirectory() },
 };

@@ -1,3 +1,4 @@
+import { harnessDisplayName } from '../shared/harness-registry';
 import { stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -36,7 +37,7 @@ export class TargetResolver {
     for (const id of request.harnessIds) {
       const harness = harnesses.find((item) => item.id === id);
       if (!harness) throw appError('HARNESS_NOT_CONFIGURED', { id });
-      if (!isHarnessEnabled(harness)) throw appError('TARGET_HARNESS_DISABLED', { name: harness.name });
+      if (!isHarnessEnabled(harness)) throw appError('TARGET_HARNESS_DISABLED', { name: harnessDisplayName(harness) });
       selected.push(harness);
     }
     if (!selected.length) throw appError('TARGET_NO_HARNESS');
@@ -60,13 +61,14 @@ export class TargetResolver {
     for (const harness of selected) {
       let configured: string;
       if (request.scope === 'user') {
-        if (!harness.userSkillsPath.trim() && !harness.readsUserAgents) throw appError('TARGET_NO_USER_PATH', { name: harness.name });
+        if (!harness.userSkillsPath.trim() && !harness.readsUserAgents)
+          throw appError('TARGET_NO_USER_PATH', { name: harnessDisplayName(harness) });
         configured = expandUserPath(harness.userSkillsPath || '~/.agents/skills', this.home);
       } else {
         const relative = validateWorkspaceRelativePath(
           harness.workspaceSkillsRelativePath || (harness.readsWorkspaceAgents ? '.agents/skills' : ''),
         );
-        if (!relative) throw appError('TARGET_NO_WORKSPACE_PATH', { name: harness.name });
+        if (!relative) throw appError('TARGET_NO_WORKSPACE_PATH', { name: harnessDisplayName(harness) });
         configured = path.resolve(workspaceCanonical!, relative);
       }
       const canonical = await canonicalizePath(configured);
@@ -185,7 +187,7 @@ export class TargetResolver {
       const target = targets.get(binding.targetId);
       if (!target?.path) continue;
       const canonical = await canonicalizePath(target.path).catch(() => undefined);
-      if (canonical?.key === targetKey) return harness?.name ?? binding.harnessId;
+      if (canonical?.key === targetKey) return harness ? harnessDisplayName(harness) : binding.harnessId;
     }
     return undefined;
   }

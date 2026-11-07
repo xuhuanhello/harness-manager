@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { Controller } from '../src/main/controller';
@@ -84,5 +84,64 @@ describe('M1 integrated workflow', () => {
       const { origin: _origin, ...editable } = harness;
       await expect(app.invoke('saveHarness', editable)).resolves.toMatchObject({ id: harness.id });
     }
+  });
+});
+
+describe('app information and recorded reveal targets', () => {
+  it('reveals known external and installed entries, rejects stale IDs and returns injected app information', async () => {
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'hm-reveal-')));
+    cleanup.push(() => rm(root, { recursive: true, force: true }));
+    const shown: string[] = [];
+    let changes = 0;
+    const app = new Controller(
+      path.join(root, 'library'),
+      () => {
+        changes += 1;
+      },
+      {
+        watch: false,
+        ports: { showItemInFolder: (value) => void shown.push(value) },
+        appInfo: { version: '9.8.7-test', platform: 'win32' },
+      },
+    );
+    cleanup.push(() => app.close());
+    await app.initialize();
+    expect(await app.invoke('appInfo', undefined)).toEqual({ version: '9.8.7-test', platform: 'win32' });
+    const target = path.join(root, 'agent');
+    const externalPath = path.join(target, 'external-helper');
+    const source = path.join(root, 'source');
+    for (const [directory, name] of [
+      [externalPath, 'external-helper'],
+      [source, 'managed-helper'],
+    ]) {
+      await mkdir(directory, { recursive: true });
+      await writeFile(path.join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: Reveal fixture\n---\n`);
+    }
+    const harness = await app.invoke('saveHarness', { name: 'Reveal Agent', userSkillsPath: target, workspaceSkillsRelativePath: '' });
+    const scan = await app.invoke('scan', { uri: source });
+    await app.invoke('install', { scanId: scan.id, candidateIds: [scan.candidates[0].id] });
+    const skill = (await app.snapshot()).skills[0];
+    await app.invoke('apply', { skillIds: [skill.id], harnessIds: [harness.id], scope: 'user', strategy: 'symlink' });
+    const snapshot = await app.snapshot();
+    const external = snapshot.externalSkills.find((item) => item.harnessId === harness.id)!;
+    const distribution = snapshot.distributions[0];
+    const mutations = changes;
+    await app.invoke('revealExternalSkill', { externalSkillId: external.id });
+    await app.invoke('revealDistribution', { distributionId: distribution.id });
+    expect(shown).toEqual([externalPath, path.join(target, 'managed-helper')]);
+    expect(distribution.entryPath).toBe(shown[1]);
+    expect(shown[1]).not.toBe(skill.directory);
+    await expect(app.invoke('revealExternalSkill', { externalSkillId: `external-${'f'.repeat(32)}` })).rejects.toMatchObject({
+      code: 'LOCATION_EXTERNAL_NOT_FOUND',
+    });
+    await expect(app.invoke('revealDistribution', { distributionId: 'missing' })).rejects.toMatchObject({
+      code: 'LOCATION_DISTRIBUTION_NOT_FOUND',
+    });
+    await rm(externalPath, { recursive: true });
+    await expect(app.invoke('revealExternalSkill', { externalSkillId: external.id })).rejects.toMatchObject({
+      code: 'LOCATION_EXTERNAL_NOT_FOUND',
+    });
+    expect(shown).toHaveLength(2);
+    expect(changes).toBe(mutations);
   });
 });
