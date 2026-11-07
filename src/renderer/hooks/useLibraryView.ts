@@ -1,14 +1,18 @@
+import { useT } from '../i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Skill, Snapshot } from '../../shared/types';
 import { sourceName } from '../format';
+import { buildHarnessSections, resolveHarnessGroupBy, type HarnessGroupBy } from '../harness-sections';
 import type { Section } from '../view-types';
 import type { LibraryData } from './useLibraryData';
 import type { Shell } from './useShell';
 
 /** The central library view: category tab, search, collapsed sections and the multi-selection. */
 export function useLibraryView(snapshot: Snapshot | null, data: LibraryData, shell: Shell) {
+  const t = useT();
   const { setMenuOpen, setToast } = shell;
   const [search, setSearch] = useState('');
+  const [harnessGroupBy, setHarnessGroupBy] = useState<HarnessGroupBy>('group');
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -30,6 +34,8 @@ export function useLibraryView(snapshot: Snapshot | null, data: LibraryData, she
   const mode = snapshot?.settings.viewMode ?? 'source';
   const activeTab = snapshot?.settings.activeTabs[mode] ?? 'all';
   const selectedCount = selected.size;
+  const harnessId = activeTab === 'all' ? 'universal' : activeTab;
+  const effectiveHarnessGroupBy = resolveHarnessGroupBy(harnessGroupBy, snapshot?.groups.length ?? 0);
 
   useEffect(() => {
     if (!snapshot) return;
@@ -60,7 +66,7 @@ export function useLibraryView(snapshot: Snapshot | null, data: LibraryData, she
       !query ||
       `${skill.name} ${skill.description} ${skill.sourcePath} ${sourceName(snapshot, skill.sourceId)}`.toLocaleLowerCase().includes(query);
     const skills = snapshot.skills.filter(matches);
-    if (mode === 'flat') return [{ id: 'flat', label: '全部技能', kind: 'flat', skills }];
+    if (mode === 'flat') return [{ id: 'flat', label: t('library.flatViewTitle'), kind: 'flat', skills }];
     if (mode === 'source') {
       const sources = activeTab === 'all' ? snapshot.sources : snapshot.sources.filter((source) => source.id === activeTab);
       return sources.map((source) => ({
@@ -68,7 +74,7 @@ export function useLibraryView(snapshot: Snapshot | null, data: LibraryData, she
         label: source.label,
         kind: 'source',
         icon: source.type,
-        meta: `${snapshot.skills.filter((skill) => skill.sourceId === source.id).length} 项`,
+        meta: t('library.itemCount', { count: snapshot.skills.filter((skill) => skill.sourceId === source.id).length }),
         skills: skills.filter((skill) => skill.sourceId === source.id),
       }));
     }
@@ -79,39 +85,24 @@ export function useLibraryView(snapshot: Snapshot | null, data: LibraryData, she
         label: group.name,
         kind: 'group' as const,
         icon: group.color,
-        meta: `${group.skillIds.filter((id) => snapshot.skills.some((skill) => skill.id === id)).length} 项`,
+        meta: t('library.itemCount', { count: group.skillIds.filter((id) => snapshot.skills.some((skill) => skill.id === id)).length }),
         skills: skills.filter((skill) => group.skillIds.includes(skill.id)),
       }));
       if (activeTab === 'all' || activeTab === 'ungrouped') {
         const grouped = new Set(snapshot.groups.flatMap((group) => group.skillIds));
         sections.push({
           id: 'group:ungrouped',
-          label: '未分组',
+          label: t('library.ungrouped'),
           kind: 'group',
           icon: 'neutral',
-          meta: `${snapshot.skills.filter((skill) => !grouped.has(skill.id)).length} 项`,
+          meta: t('library.itemCount', { count: snapshot.skills.filter((skill) => !grouped.has(skill.id)).length }),
           skills: skills.filter((skill) => !grouped.has(skill.id)),
         });
       }
       return sections;
     }
-    const harnessId = activeTab === 'all' ? 'universal' : activeTab;
-    const bindingIds = new Set(
-      snapshot.bindings.filter((binding) => binding.scope === 'user' && binding.harnessId === harnessId).map((binding) => binding.id),
-    );
-    const skillIds = new Set(snapshot.intents.filter((intent) => bindingIds.has(intent.bindingId)).map((intent) => intent.skillId));
-    const harness = snapshot.harnesses.find((item) => item.id === harnessId);
-    const name = harness ? `${harness.name} · 用户级安装` : '用户级通用技能';
-    return [
-      {
-        id: `harness:${harnessId}`,
-        label: name,
-        kind: 'harness',
-        icon: harness?.icon || 'H',
-        skills: skills.filter((skill) => skillIds.has(skill.id)),
-      },
-    ];
-  }, [snapshot, mode, activeTab, search]);
+    return buildHarnessSections(snapshot, harnessId, effectiveHarnessGroupBy, query ? matches : undefined);
+  }, [snapshot, mode, activeTab, search, harnessId, effectiveHarnessGroupBy, t]);
 
   const skillOnCurrentView = useMemo(
     () => new Set(visibleSections.flatMap((section) => section.skills.map((skill) => skill.id))),
@@ -123,9 +114,9 @@ export function useLibraryView(snapshot: Snapshot | null, data: LibraryData, she
         (section) =>
           section.skills.length > 0 ||
           (section.kind === 'group' && section.id === 'group:ungrouped') ||
-          (section.kind === 'source' && !search),
+          (mode !== 'harness' && section.kind === 'source' && !search),
       ),
-    [visibleSections, search],
+    [visibleSections, search, mode],
   );
   const expandableSections = renderedSections.filter((section) => section.kind !== 'flat');
   const normalizedSearch = search.trim().toLocaleLowerCase();
@@ -197,7 +188,7 @@ export function useLibraryView(snapshot: Snapshot | null, data: LibraryData, she
   const beginSelection = () => {
     setSelectMode(true);
     setMenuOpen(false);
-    setToast('多选已开启；选择技能、来源或分组，再统一应用。');
+    setToast(t('library.selectionModeEnabledSelectSkillsSourcesOrGroupsThenApply'));
   };
 
   return {
@@ -211,6 +202,10 @@ export function useLibraryView(snapshot: Snapshot | null, data: LibraryData, she
     selectedCount,
     mode,
     activeTab,
+    harnessId,
+    harnessGroupBy,
+    effectiveHarnessGroupBy,
+    setHarnessGroupBy,
     skillOnCurrentView,
     renderedSections,
     expandableSections,

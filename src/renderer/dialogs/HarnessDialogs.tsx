@@ -1,23 +1,31 @@
-import { LoaderCircle, Trash2 } from 'lucide-react';
+import { useT } from '../i18n';
+import { useState } from 'react';
+import { LoaderCircle, Unlink } from 'lucide-react';
 import { ApplyResults } from '../components/ApplyFlow';
 import { MigrationIssuePanel, MigrationPreviewPanel, MigrationResults, MigrationScanState } from '../components/MigrationPanels';
 import ModalShell from '../components/ModalShell';
-import { formatCount } from '../format';
 import type { MigrationFlow } from '../hooks/useMigrationFlow';
 import type { Shell } from '../hooks/useShell';
 import type { WorkspaceFlow } from '../hooks/useWorkspaceFlow';
 import { FormError } from './LibraryDialogs';
 
 export function RemoveDialog({ shell, workspace }: { shell: Shell; workspace: WorkspaceFlow }) {
+  const t = useT();
+  const [expanded, setExpanded] = useState(false);
   const { removeDraft: draft, removeResult: result } = workspace;
   if (!draft) return null;
   const { busy, error, setError } = shell;
   return (
     <ModalShell
       locked={!!busy}
-      title={result ? '移除结果' : '移除受管安装'}
-      subtitle={result ? '中央技能库中的源文件仍然保留。' : '只撤销所选 Harness 目标的安装关系。'}
-      onClose={workspace.closeRemove}
+      title={result ? t('dialogs.unapplyResults') : t('dialogs.unapply')}
+      initialFocus="[data-remove-back]"
+      subtitle={
+        result
+          ? t('dialogs.sourceFilesInTheSkillLibraryAreKept')
+          : t('dialogs.onlyInstallationsInHarnessDirectoriesAreRemovedSourceFilesIn')
+      }
+      onClose={result ? workspace.finishRemove : workspace.closeRemove}
     >
       {result ? (
         <ApplyResults result={result} onDone={workspace.finishRemove} />
@@ -25,22 +33,40 @@ export function RemoveDialog({ shell, workspace }: { shell: Shell; workspace: Wo
         <>
           <div className="remove-warning">
             <div className="warning-icon">
-              <Trash2 size={17} />
+              <Unlink size={17} />
             </div>
             <div>
-              <strong>
-                从 {draft.harnessName} 移除 {formatCount(draft.skillIds.length, '个安装')}
-              </strong>
-              <p>{draft.skillNames.join('、')}</p>
-              <span>如果共享目录仍被其他绑定使用，文件会继续保留。</span>
+              <strong>{t('dialogs.unapplySummary', { harnessName: draft.harnessName, count: draft.skills.length })}</strong>
+              <p>
+                {draft.origin === 'library'
+                  ? t('dialogs.scopeSelectedSkills', { scopeLabel: draft.scopeLabel })
+                  : t('dialogs.workspaceScopeSummary', { scopeLabel: draft.scopeLabel })}
+              </p>
+              <div className={`remove-skill-tags ${expanded ? 'expanded' : ''}`}>
+                {(expanded ? draft.skills : draft.skills.slice(0, 6)).map((skill) => (
+                  <span className="tag" key={skill.id}>
+                    {skill.name}
+                  </span>
+                ))}
+              </div>
+              {draft.skills.length > 6 && (
+                <button className="text-button" onClick={() => setExpanded(!expanded)}>
+                  {expanded ? t('dialogs.hide') : t('dialogs.itemsInTotalShowAll', { count: draft.skills.length })}
+                </button>
+              )}
+              {draft.sharedNotes?.map((note) => (
+                <p key={note}>{note}</p>
+              ))}
+              <p>{t('dialogs.youCanApplyTheseSkillsAgainFromTheLibraryAt')}</p>
             </div>
           </div>
           <div className="dialog-footer spread">
-            <button className="button subtle" onClick={workspace.closeRemove}>
-              取消
+            <button data-remove-back className="button subtle" onClick={workspace.closeRemove}>
+              {t('dialogs.back')}
             </button>
             <button className="button danger" onClick={() => void workspace.confirmRemove()}>
-              {busy === 'remove' ? <LoaderCircle size={15} className="spin" /> : <Trash2 size={15} />}确认移除
+              {busy === 'remove' ? <LoaderCircle size={15} className="spin" /> : <Unlink size={15} />}
+              {t('dialogs.unapplyCount', { count: draft.skills.length })}
             </button>
           </div>
           <FormError error={error} onDismiss={() => setError('')} />
@@ -51,21 +77,30 @@ export function RemoveDialog({ shell, workspace }: { shell: Shell; workspace: Wo
 }
 
 export function MigrationDialog({ shell, migration }: { shell: Shell; migration: MigrationFlow }) {
+  const t = useT();
   const { target, preview, result, error } = migration;
   if (!target) return null;
   const { busy } = shell;
   return (
     <ModalShell
       locked={!!busy}
-      title={result ? '迁移结果' : preview ? '确认迁移范围' : error ? '处理迁移问题' : '检测迁移范围'}
+      title={
+        result
+          ? t('dialogs.migrationResults')
+          : preview
+            ? t('dialogs.reviewMigrationScope')
+            : error
+              ? t('dialogs.resolveMigrationIssues')
+              : t('dialogs.checkMigrationScope')
+      }
       subtitle={
         result
-          ? '以下结果按项列出。'
+          ? t('dialogs.resultsAreListedByItemBelow')
           : preview
-            ? '核对真实源路径及所有检测到的引用。'
+            ? t('dialogs.verifyTheSourcePathAndAllDetectedReferences')
             : error
-              ? '可修复受管链接、检查 Harness 设置或重新检测。'
-              : '确认前会先读取真实源路径和已知引用。'
+              ? t('dialogs.repairManagedLinksCheckHarnessSettingsOrDetectAgain')
+              : t('dialogs.sourcePathsAndKnownReferencesWillBeCheckedBeforeConfirmation')
       }
       onClose={() => {
         if (busy) return;

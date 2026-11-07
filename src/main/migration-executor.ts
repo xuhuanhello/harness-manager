@@ -1,3 +1,5 @@
+import { formatList } from '../shared/i18n';
+import { harnessNameById } from '../shared/harness-registry';
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readlink, realpath, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -119,13 +121,11 @@ export class MigrationExecutor {
       (reference) => !enabledEntryPaths.has(canonicalizeLexical(reference.path)),
     );
     if (independentDisabledReferences.length) {
-      const names = [
-        ...new Set(
-          independentDisabledReferences.map(
-            (reference) => this.store.get<Harness>('harnesses', reference.harnessId)?.name ?? reference.harnessId,
-          ),
+      const names = formatList(
+        new Set(
+          independentDisabledReferences.map((reference) => harnessNameById(this.store.list<Harness>('harnesses'), reference.harnessId)),
         ),
-      ].join(', ');
+      );
       throw appError('MIGRATION_DISABLED_REFERENCES', { names });
     }
     for (const reference of currentReferences) {
@@ -456,10 +456,8 @@ export class MigrationExecutor {
   }
 
   private migrationEntryLabel(entry: MigrationEntryPlan): string {
-    const names = [
-      ...new Set(entry.bindings.map((binding) => this.store.get<Harness>('harnesses', binding.harnessId)?.name ?? binding.harnessId)),
-    ];
-    return `${entry.path} (${names.join(', ')})`;
+    const names = [...new Set(entry.bindings.map((binding) => harnessNameById(this.store.list<Harness>('harnesses'), binding.harnessId)))];
+    return `${entry.path} (${formatList(names)})`;
   }
 
   private async finishMigrationCleanup(operationId: string): Promise<void> {

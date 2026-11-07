@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useT } from '../i18n';
+import { useMemo, type Dispatch, type SetStateAction } from 'react';
 import {
   Activity,
   ArrowLeft,
@@ -10,7 +11,7 @@ import {
   Package,
   Plus,
   Sparkles,
-  Trash2,
+  Unlink,
 } from 'lucide-react';
 import type { Snapshot } from '../../shared/types';
 import type { RemovalDraft } from '../view-types';
@@ -26,6 +27,8 @@ export function WorkspacePage({
   busy,
   onAddSkills,
   onRemove,
+  removalSelections,
+  setRemovalSelections,
 }: {
   snapshot: Snapshot;
   selectedPath: string;
@@ -36,9 +39,10 @@ export function WorkspacePage({
   busy: string;
   onAddSkills: (path: string) => void;
   onRemove: (draft: RemovalDraft) => void;
+  removalSelections: Record<string, string[]>;
+  setRemovalSelections: Dispatch<SetStateAction<Record<string, string[]>>>;
 }) {
-  const [removalSelections, setRemovalSelections] = useState<Record<string, string[]>>({});
-  useEffect(() => setRemovalSelections({}), [selectedPath]);
+  const t = useT();
   const selectedWorkspace = snapshot.workspaces.find((workspace) => workspace.path === selectedPath);
   const installations = useMemo(() => {
     if (!selectedWorkspace) return [];
@@ -68,21 +72,21 @@ export function WorkspacePage({
       <div className="workspace-top-actions">
         <span className="workspace-updated-note">
           <Clock3 size={13} />
-          最近选择
+          {t('workspace.recentlySelected')}
         </span>
         <button className="button primary" onClick={onChoose}>
           <FolderPlus size={15} />
-          打开工作区
+          {t('workspace.openWorkspace')}
         </button>
       </div>
       {!selectedPath ? (
         <>
           <div className="workspace-section-head">
             <div>
-              <h2>最近工作区</h2>
-              <p>工作区配置保存在选定目录，不会自动扩展到其它项目。</p>
+              <h2>{t('workspace.recentWorkspaces')}</h2>
+              <p>{t('workspace.workspaceSettingsBelongToTheChosenDirectoryAndDoNot')}</p>
             </div>
-            <span className="subtle-count">{snapshot.workspaces.length} 个</span>
+            <span className="subtle-count">{formatCount(snapshot.workspaces.length)}</span>
           </div>
           {snapshot.workspaces.length ? (
             <div className="workspace-grid">
@@ -102,7 +106,7 @@ export function WorkspacePage({
                       <strong>{workspace.name || workspace.path.split(/[\\/]/).at(-1)}</strong>
                       <span title={workspace.path}>{workspace.path}</span>
                     </div>
-                    <span className="workspace-skill-count">{count} 项</span>
+                    <span className="workspace-skill-count">{formatCount(count)}</span>
                     <ArrowRight size={15} className="workspace-card-arrow" />
                   </button>
                 );
@@ -113,11 +117,11 @@ export function WorkspacePage({
               <div className="empty-workspace-icon">
                 <FolderOpen size={21} />
               </div>
-              <h2>还没有打开过工作区</h2>
-              <p>选择本地工作目录后，应用技能时可以选定要配置的 Harness。目录会按物理路径记录。</p>
+              <h2>{t('workspace.noWorkspacesOpenedYet')}</h2>
+              <p>{t('workspace.chooseALocalWorkingDirectoryThenSelectTheHarnessesTo')}</p>
               <button className="button primary" onClick={onChoose}>
                 <FolderPlus size={15} />
-                选择工作目录
+                {t('workspace.chooseWorkingDirectory')}
               </button>
             </div>
           )}
@@ -125,40 +129,41 @@ export function WorkspacePage({
       ) : (
         <>
           <div className="workspace-detail-heading">
-            <button className="back-button" onClick={onBack} aria-label="返回工作区列表">
+            <button className="back-button" onClick={onBack} aria-label={t('workspace.backToWorkspaceList')}>
               <ArrowLeft size={14} />
-              工作区列表
+              {t('workspace.workspaceList')}
             </button>
             <div className="workspace-title-line">
               <div className="workspace-detail-icon">
                 <FolderOpen size={19} />
               </div>
               <div>
-                <p className="eyebrow">{selectedWorkspace ? '已登记工作区' : '当前目录'}</p>
+                <p className="eyebrow">{selectedWorkspace ? t('workspace.registeredWorkspace') : t('workspace.currentDirectory')}</p>
                 <h2>{selectedWorkspace?.name || selectedPath.split(/[\\/]/).filter(Boolean).at(-1) || selectedPath}</h2>
                 <span className="workspace-fullpath">{selectedPath}</span>
               </div>
             </div>
             <div className="workspace-detail-actions">
               <button className="button subtle" onClick={onHealth} disabled={busy === 'health'}>
-                {busy === 'health' ? <LoaderCircle size={14} className="spin" /> : <Activity size={14} />}检查路径
+                {busy === 'health' ? <LoaderCircle size={14} className="spin" /> : <Activity size={14} />}
+                {t('workspace.inspectPath')}
               </button>
               <button className="button primary" onClick={() => onAddSkills(selectedPath)}>
                 <Plus size={15} />
-                添加技能
+                {t('workspace.addSkills')}
               </button>
             </div>
           </div>
           <div className="workspace-note">
             <Sparkles size={14} />
-            <span>同一工作区内，其他兼容的 Agent 也可能识别这些技能。</span>
+            <span>{t('workspace.otherCompatibleAgentsInThisWorkspaceMayAlsoDiscoverThese')}</span>
           </div>
           <div className="workspace-section-head">
             <div>
-              <h2>Harness 安装</h2>
-              <p>每个 Harness 可能使用独立目录，也可能与其它工具共享同一路径。</p>
+              <h2>{t('workspace.harnessInstallations')}</h2>
+              <p>{t('workspace.eachHarnessMayUseItsOwnDirectoryOrShareA')}</p>
             </div>
-            <span className="subtle-count">{formatCount(installedCount, '项')}</span>
+            <span className="subtle-count">{formatCount(installedCount, 'item')}</span>
           </div>
           {installations.length ? (
             <div className="workspace-installations">
@@ -167,14 +172,14 @@ export function WorkspacePage({
                 const chosen = removalSelections[binding.id] ?? [];
                 const allChosen = ids.length > 0 && ids.every((id) => chosen.includes(id));
                 const partial = chosen.length > 0 && !allChosen;
-                const harnessName = harness?.id === 'universal' ? '用户级通用技能' : harness?.name || '未知 Harness';
+                const harnessName = harness?.name || t('workspace.unknownHarness');
                 return (
                   <section className="workspace-install-group" key={binding.id}>
                     <div className="installation-heading">
                       <input
                         className="tri-checkbox"
                         type="checkbox"
-                        aria-label={`选择 ${harnessName} 下全部安装`}
+                        aria-label={t('workspace.selectAllInstallationsUnder', { harnessName: harnessName })}
                         checked={allChosen}
                         ref={(node) => {
                           if (node) node.indeterminate = partial;
@@ -186,22 +191,25 @@ export function WorkspacePage({
                       </span>
                       <div>
                         <strong>{harnessName}</strong>
-                        <span>{directory || '工作区技能目录'}</span>
+                        <span>{directory || t('workspace.workspaceSkillDirectory')}</span>
                       </div>
                       <button
                         className="button subtle danger-quiet"
                         disabled={!chosen.length}
                         onClick={() =>
                           onRemove({
-                            bindingId: binding.id,
+                            parts: [{ bindingId: binding.id, skillIds: chosen }],
+                            origin: 'workspace',
+                            scopeLabel: selectedWorkspace?.name || selectedPath,
                             harnessName,
-                            skillIds: chosen,
-                            skillNames: items.flatMap((item) => (item.skill && chosen.includes(item.skill.id) ? [item.skill.name] : [])),
+                            skills: items.flatMap((item) =>
+                              item.skill && chosen.includes(item.skill.id) ? [{ id: item.skill.id, name: item.skill.name }] : [],
+                            ),
                           })
                         }
                       >
-                        <Trash2 size={14} />
-                        移除所选{chosen.length ? ` ${chosen.length}` : ''}
+                        <Unlink size={14} />
+                        {chosen.length ? t('workspace.unapplyCount', { count: chosen.length }) : t('workspace.unapplySelected')}
                       </button>
                     </div>
                     <div className="installation-list">
@@ -220,7 +228,7 @@ export function WorkspacePage({
                                     return { ...current, [binding.id]: [...next] };
                                   })
                                 }
-                                aria-label={`选择 ${skill.name} 安装`}
+                                aria-label={t('workspace.selectInstallationOf', { name: skill.name })}
                               />
                               <div className="mini-skill-icon">{initial(skill.name)}</div>
                               <div>
@@ -228,19 +236,19 @@ export function WorkspacePage({
                                 <span>
                                   {distribution?.health === 'healthy'
                                     ? distribution.verification === 'passed'
-                                      ? '文件正常 · 验证通过'
+                                      ? t('workspace.filesHealthyVerified')
                                       : distribution.verification === 'failed'
-                                        ? '文件正常 · 验证失败'
-                                        : '文件正常 · 识别未验证'
-                                    : distribution?.health || '状态未知'}{' '}
-                                  · {distribution?.strategy === 'copy' ? '兼容复制' : '软链'}
+                                        ? t('workspace.filesHealthyVerificationFailed')
+                                        : t('workspace.filesHealthyDiscoveryNotVerified')
+                                    : distribution?.health || t('workspace.unknownStatus')}{' '}
+                                  · {distribution?.strategy === 'copy' ? t('workspace.copyForCompatibility') : t('workspace.symlink')}
                                 </span>
                               </div>
                               <span className={`health-mark ${distribution?.health || 'missing'}`} />
                             </label>
                           ),
                       )}
-                      {!items.length && <div className="section-empty">此目标目前没有受管安装。</div>}
+                      {!items.length && <div className="section-empty">{t('workspace.noManagedInstallationsInThisDestination')}</div>}
                     </div>
                   </section>
                 );
@@ -249,16 +257,17 @@ export function WorkspacePage({
           ) : (
             <div className="workspace-empty-state">
               <Package size={19} />
-              <strong>此工作区暂无受管技能</strong>
-              <span>从中央库选择技能并应用到一个或多个 Harness。</span>
+              <strong>{t('workspace.noManagedSkillsInThisWorkspaceYet')}</strong>
+              <span>{t('workspace.selectLibrarySkillsAndApplyThemToOneOrMore')}</span>
               <button className="text-button" onClick={() => onAddSkills(selectedPath)}>
-                选择中央库技能 <ArrowRight size={14} />
+                {t('workspace.chooseLibrarySkills')}
+                <ArrowRight size={14} />
               </button>
             </div>
           )}
           <button className="text-button change-workspace" onClick={onChoose}>
             <FolderOpen size={14} />
-            打开另一个工作区
+            {t('workspace.openAnotherWorkspace')}
           </button>
         </>
       )}

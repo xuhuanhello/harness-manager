@@ -4,6 +4,11 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import packageJson from '../../package.json' with { type: 'json' };
+
+process.env.HARNESS_SYSTEM_LOCALE = 'zh-CN';
+
+const revealLabel = process.platform === 'darwin' ? '在访达中打开' : '在文件管理器中打开';
 
 async function stubMarketLeaderboard(app: ElectronApplication) {
   await app.evaluate(() => {
@@ -101,14 +106,38 @@ test('desktop bridge, persistence and workspace configuration', async () => {
     await reopened.getByRole('menuitemradio', { name: '按 Harness', exact: true }).click();
     await reopened.getByRole('tab', { name: /Acceptance Agent/ }).click();
     await reopened.getByTestId('start-selection').click();
-    await reopened.getByRole('checkbox').first().check();
-    await reopened.getByRole('button', { name: /从 Acceptance Agent 移除所选/ }).click();
-    await reopened.getByRole('button', { name: '确认移除', exact: true }).click();
-    await expect(reopened.getByText('操作已完成', { exact: true })).toBeVisible();
+    await reopened.getByRole('checkbox', { name: '选择 search-tool', exact: true }).check();
+    await reopened.getByTestId('unapply-selection').click();
+    await reopened.getByRole('button', { name: '确认取消应用 1 项', exact: true }).click();
+    await expect(reopened.getByText('已从 Acceptance Agent 取消应用 search-tool', { exact: true })).toBeVisible();
     const afterRemoval = await reopened.evaluate(() => window.harness.snapshot());
     expect(afterRemoval.skills).toHaveLength(1);
     expect(afterRemoval.distributions).toHaveLength(1);
     expect(await readFile(path.join(workspace, '.acceptance/skills/search-tool/SKILL.md'), 'utf8')).toContain('local search skill');
+
+    // Workspace removal must preserve the central library's independent selection.
+    await reopened.getByTestId('view-mode-select').click();
+    await reopened.getByRole('menuitemradio', { name: '平铺', exact: true }).click();
+    await reopened.getByTestId('start-selection').click();
+    await reopened.getByRole('checkbox', { name: '选择 search-tool', exact: true }).check();
+    await expect(reopened.locator('.selection-dock')).not.toHaveClass(/with-unapply/);
+    expect(await reopened.locator('.selection-dock').evaluate((element) => element.getBoundingClientRect().width)).toBeLessThanOrEqual(670);
+    await reopened
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('button', { name: /^工作区/ })
+      .click();
+    await reopened.locator('.workspace-card').click();
+    await reopened.getByRole('checkbox', { name: '选择 search-tool 安装', exact: true }).check();
+    await reopened.getByRole('button', { name: '取消应用所选 1', exact: true }).click();
+    await reopened.getByRole('button', { name: '确认取消应用 1 项', exact: true }).click();
+    await expect(reopened.getByRole('status')).toContainText('已从 Acceptance Agent 取消应用 search-tool');
+    await expect(reopened.getByRole('checkbox', { name: '选择 search-tool 安装', exact: true })).toHaveCount(0);
+    await reopened
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('button', { name: /^中央技能库/ })
+      .click();
+    await expect(reopened.getByRole('checkbox', { name: '选择 search-tool', exact: true })).toBeChecked();
+    await expect(reopened.getByTestId('apply-selection')).toHaveText('应用 1');
   } finally {
     await app?.close();
     await rm(root, { recursive: true, force: true });
@@ -660,7 +689,7 @@ test('in-app catalogs group by repository and scan a source for confirmed batch 
     expect(await app.evaluate(() => (globalThis as typeof globalThis & { skillOpened?: string }).skillOpened)).toBe(
       `https://github.com/catalog/demo/tree/${installed.resolvedCommit}/alpha-helper`,
     );
-    await page.getByRole('button', { name: '在访达中显示 alpha-helper', exact: true }).click();
+    await page.getByRole('button', { name: `${revealLabel} alpha-helper`, exact: true }).click();
     expect(await app.evaluate(() => (globalThis as typeof globalThis & { skillRevealed?: string }).skillRevealed)).toBe(
       installed.directory,
     );
@@ -1007,6 +1036,288 @@ test('library checks sources for updates, badges the view menu and applies the s
     expect(await readFile(path.join(byName('review').directory, 'notes.txt'), 'utf8')).toBe('v2');
     expect(await readFile(path.join(byName('handoff').directory, 'notes.txt'), 'utf8')).toBe('v1');
     expect(snapshot.issues).toEqual([]);
+  } finally {
+    await app?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Harness sections unapply an entire selected group and leave other groups installed', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hm-unapply-groups-'));
+  let app: ElectronApplication | undefined;
+  const source = path.join(root, 'source');
+  const target = path.join(root, 'user-skills');
+  for (const name of ['external10', 'external2']) {
+    const directory = path.join(target, name);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: External sorting acceptance\n---\n`);
+  }
+  for (const name of ['api-contract-check', 'e2e-playwright', 'design-handoff']) {
+    const directory = path.join(source, name);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: Group removal acceptance\n---\n`);
+  }
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => typeof entry[1] === 'string' && !['ELECTRON_RUN_AS_NODE', 'HARNESS_DEV_URL'].includes(entry[0]),
+    ),
+  );
+  try {
+    app = await electron.launch({
+      args: ['.'],
+      env: { ...env, HARNESS_LIBRARY_ROOT: path.join(root, 'library'), HARNESS_PROFILE_ROOT: path.join(root, 'profile') },
+    });
+    const page = await app.firstWindow();
+    await page.waitForFunction(() => Boolean(window.harness));
+    await page.evaluate(
+      async ({ source, target }) => {
+        const scan = await window.harness.scan({ uri: source });
+        await window.harness.install({ scanId: scan.id, candidateIds: scan.candidates.map((item) => item.id) });
+        const { skills } = await window.harness.snapshot();
+        await window.harness.saveGroup({
+          name: 'Engineering',
+          skillIds: skills.filter((skill) => skill.name !== 'design-handoff').map((skill) => skill.id),
+        });
+        await window.harness.saveGroup({
+          name: 'Design',
+          skillIds: skills.filter((skill) => skill.name === 'design-handoff').map((skill) => skill.id),
+        });
+        const harness = await window.harness.saveHarness({
+          name: 'Grouped Agent',
+          userSkillsPath: target,
+          workspaceSkillsRelativePath: '.grouped/skills',
+        });
+        await window.harness.apply({
+          skillIds: skills.map((skill) => skill.id),
+          harnessIds: [harness.id],
+          scope: 'user',
+          strategy: 'symlink',
+        });
+      },
+      { source, target },
+    );
+    // The management link enters the same Harness tab and multi-selection flow.
+    await page.getByRole('button', { name: 'Agent Harness', exact: true }).click();
+    await page.getByRole('tab', { name: /Grouped Agent/ }).click();
+    await expect(page.locator('.agent-section-heading .agent-section-count')).toHaveText('5');
+    expect(
+      (await page.locator('.effective-section:not(.external-agent-section) .agent-skill-title > strong').allTextContents()).sort(),
+    ).toEqual(['api-contract-check', 'design-handoff', 'e2e-playwright']);
+    await expect(page.locator('.external-agent-section .agent-skill-title > strong')).toHaveText(['external2', 'external10']);
+    await page.getByRole('button', { name: '在中央库中管理 →', exact: true }).click();
+    await expect(page.getByRole('tab', { name: /Grouped Agent/ })).toHaveAttribute('aria-selected', 'true');
+    const engineering = page
+      .locator('.skill-section')
+      .filter({ has: page.locator('.section-heading strong', { hasText: /^Engineering$/ }) });
+    const design = page.locator('.skill-section').filter({ has: page.locator('.section-heading strong', { hasText: /^Design$/ }) });
+    await expect(engineering).toBeVisible();
+    await expect(design).toBeVisible();
+    await expect(page.getByRole('radio', { name: '业务分组', exact: true })).toHaveAttribute('aria-checked', 'true');
+    const unapply = page.getByTestId('unapply-selection');
+    await expect(unapply).toBeDisabled();
+    await expect(page.locator('.selection-dock')).toContainText('勾选技能或整个分区，可应用或取消应用');
+    await page.getByRole('button', { name: '全部折叠', exact: true }).click();
+    await expect(engineering.locator('.section-subtitle')).toHaveText('api-contract-check、e2e-playwright');
+    await expect(page.locator('.skill-row')).toHaveCount(0);
+    await engineering.getByRole('checkbox', { name: '选择Engineering中的 2 个技能', exact: true }).check();
+    await expect(unapply).toHaveText('取消应用 2');
+    const dock = page.locator('.selection-dock');
+    await expect(dock).toHaveClass(/with-unapply/);
+    const toastBounds = await page.getByRole('status').boundingBox();
+    const dockBounds = await dock.boundingBox();
+    expect(toastBounds!.y + toastBounds!.height).toBeLessThanOrEqual(dockBounds!.y);
+    const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+    for (const width of [900, 640]) {
+      await page.setViewportSize({ width, height: viewport.height });
+      const bounds = await dock.boundingBox();
+      for (const action of [unapply, page.getByTestId('apply-selection')]) {
+        await expect(action).toBeVisible();
+        const button = await action.boundingBox();
+        expect(button!.x).toBeGreaterThanOrEqual(bounds!.x);
+        expect(button!.x + button!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+      }
+      if (width === 900) await expect(dock.getByRole('button')).toHaveCount(4);
+      else await expect(dock.getByRole('button', { name: '查看已选', exact: true })).toBeHidden();
+    }
+    await page.setViewportSize(viewport);
+    await page.screenshot({ path: test.info().outputPath('harness-unapply-group-selection.png'), fullPage: true });
+    await unapply.click();
+    const dialog = page.getByRole('dialog', { name: '取消应用', exact: true });
+    await expect(dialog.getByRole('button', { name: '返回', exact: true })).toBeFocused();
+    await expect(dialog).toContainText('范围：已选择的技能 · 用户级');
+    await expect(dialog.locator('.tag')).toHaveCount(2);
+    await page.screenshot({ path: test.info().outputPath('harness-unapply-confirmation.png'), fullPage: true });
+    await dialog.getByRole('button', { name: '确认取消应用 2 项', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('已从 Grouped Agent 取消应用 2 个技能');
+    await expect(dialog).toHaveCount(0);
+    await expect(engineering).toHaveCount(0);
+    await expect(design).toBeVisible();
+    await expect(page.locator('.selection-dock')).toHaveCount(0);
+    await expect(page.getByTestId('start-selection')).toHaveText('选择多个');
+    const after = await page.evaluate(() => window.harness.snapshot());
+    expect(after.skills).toHaveLength(3);
+    expect(after.intents.map((intent) => after.skills.find((skill) => skill.id === intent.skillId)?.name)).toEqual(['design-handoff']);
+    expect((await lstat(path.join(target, 'design-handoff'))).isSymbolicLink()).toBe(true);
+    await expect(lstat(path.join(target, 'api-contract-check'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(lstat(path.join(target, 'e2e-playwright'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await page.screenshot({ path: test.info().outputPath('harness-unapply-group-result.png'), fullPage: true });
+    // Re-entering selection starts empty after all selected skills succeeded.
+    await page.getByTestId('start-selection').click();
+    await expect(unapply).toBeDisabled();
+    await expect(page.getByTestId('apply-selection')).toHaveText('应用 0');
+    await page.evaluate(async () => {
+      for (const group of (await window.harness.snapshot()).groups) await window.harness.deleteGroup(group.id);
+    });
+    const grouping = page.getByRole('group', { name: 'Harness 视图分区方式', exact: true });
+    const businessGrouping = grouping.getByRole('radio', { name: '业务分组', exact: true });
+    await expect(businessGrouping).toBeDisabled();
+    await expect(businessGrouping).toHaveAttribute('title', '还没有业务分组');
+    await expect(grouping.getByRole('radio', { name: '来源', exact: true })).toBeChecked();
+    await page.evaluate(async () => {
+      const snapshot = await window.harness.snapshot();
+      await window.harness.saveGroup({ name: 'Restored group', skillIds: snapshot.skills.map((skill) => skill.id) });
+    });
+    await expect(businessGrouping).toBeEnabled();
+    await expect(businessGrouping).toBeChecked();
+  } finally {
+    await app?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('effective Harness skills group managed entries, reveal recorded paths and display the app version', async () => {
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'hm-effective-ui-')));
+  let app: ElectronApplication | undefined;
+  const source = path.join(root, 'source');
+  const target = path.join(root, 'user-skills');
+  const workspace = path.join(root, 'workspace');
+  const otherWorkspace = path.join(root, 'other-workspace');
+  await mkdir(workspace);
+  await mkdir(otherWorkspace);
+  for (const name of ['engine10', 'engine2', 'engine1', 'engine3', 'design-handoff']) {
+    const directory = path.join(source, name);
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: Effective skill acceptance\n---\n`);
+  }
+  const externalPath = path.join(target, 'external-helper');
+  await mkdir(externalPath, { recursive: true });
+  await writeFile(path.join(externalPath, 'SKILL.md'), '---\nname: external-helper\ndescription: External acceptance\n---\n');
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => typeof entry[1] === 'string' && !['ELECTRON_RUN_AS_NODE', 'HARNESS_DEV_URL'].includes(entry[0]),
+    ),
+  );
+  try {
+    app = await electron.launch({
+      args: ['.'],
+      env: { ...env, HARNESS_LIBRARY_ROOT: path.join(root, 'library'), HARNESS_PROFILE_ROOT: path.join(root, 'profile') },
+    });
+    await app.evaluate(({ shell }) => {
+      shell.showItemInFolder = (filename) => {
+        const state = globalThis as typeof globalThis & { revealedEntries?: string[] };
+        state.revealedEntries ??= [];
+        state.revealedEntries.push(filename);
+      };
+    });
+    const page = await app.firstWindow();
+    await page.waitForFunction(() => Boolean(window.harness));
+    await page.evaluate(
+      async ({ source, target, workspace, otherWorkspace }) => {
+        const scan = await window.harness.scan({ uri: source });
+        await window.harness.install({ scanId: scan.id, candidateIds: scan.candidates.map((item) => item.id) });
+        const { skills } = await window.harness.snapshot();
+        await window.harness.saveGroup({
+          name: 'Engineering',
+          skillIds: skills.filter((skill) => skill.name.startsWith('engine')).map((skill) => skill.id),
+        });
+        await window.harness.saveGroup({
+          name: 'Design',
+          skillIds: skills.filter((skill) => ['design-handoff', 'engine2'].includes(skill.name)).map((skill) => skill.id),
+        });
+        const harness = await window.harness.saveHarness({
+          name: 'Effective Agent',
+          userSkillsPath: target,
+          workspaceSkillsRelativePath: '.effective/skills',
+        });
+        await window.harness.saveHarness({
+          name: 'Mirror Agent',
+          userSkillsPath: target,
+          workspaceSkillsRelativePath: '.effective/skills',
+        });
+        const input = { skillIds: skills.map((skill) => skill.id), harnessIds: [harness.id], strategy: 'symlink' as const };
+        await window.harness.apply({ ...input, scope: 'user' });
+        await window.harness.apply({ ...input, scope: 'workspace', workspacePath: workspace });
+        await window.harness.apply({ ...input, scope: 'workspace', workspacePath: otherWorkspace });
+      },
+      { source, target, workspace, otherWorkspace },
+    );
+    expect(await page.evaluate(() => window.harness.appInfo())).toEqual({
+      version: packageJson.version,
+      platform: process.platform,
+      systemLocale: 'zh-CN',
+    });
+    await expect(page.locator('.footer-version')).toHaveText(`v${packageJson.version}`);
+    await page.getByRole('button', { name: 'Agent Harness', exact: true }).click();
+    await page.getByRole('tab', { name: /Effective Agent/ }).click();
+    await expect(page.getByRole('heading', { name: '生效技能', exact: true })).toBeVisible();
+    await expect(page.locator('.agent-section-heading p')).toHaveText(
+      '6 个技能在 Effective Agent 中生效：5 个由中央技能库托管，1 个为外部技能。',
+    );
+    await expect(page.locator('.agent-section-count')).toHaveText('6');
+    const groupOrder = await page.evaluate(async () => (await window.harness.snapshot()).groups.map((group) => group.name));
+    await expect(page.locator('.effective-section .section-heading > strong')).toHaveText([...groupOrder, '外部技能']);
+    const engineering = page
+      .locator('.effective-section')
+      .filter({ has: page.locator('.section-heading > strong', { hasText: /^Engineering$/ }) });
+    const design = page.locator('.effective-section').filter({ has: page.locator('.section-heading > strong', { hasText: /^Design$/ }) });
+    await expect(engineering.locator('.agent-skill-title > strong')).toHaveText(['engine1', 'engine2', 'engine3', 'engine10']);
+    await expect(design.locator('.agent-skill-title > strong')).toHaveText(['design-handoff', 'engine2']);
+    const external = page.locator('.external-agent-card');
+    await expect(external.getByRole('button', { name: '迁移到中央仓库管理', exact: true })).toBeVisible();
+    const badgeSize = await external.locator('.external-badge').evaluate((node) => getComputedStyle(node).fontSize);
+    const managedBadgeSize = await engineering
+      .locator('.agent-managed-badge')
+      .first()
+      .evaluate((node) => getComputedStyle(node).fontSize);
+    expect(badgeSize).toBe(managedBadgeSize);
+    await external.getByRole('button', { name: `${revealLabel} external-helper`, exact: true }).click();
+    await engineering.getByRole('button', { name: `${revealLabel} engine1`, exact: true }).click();
+    await expect
+      .poll(() => app!.evaluate(() => (globalThis as typeof globalThis & { revealedEntries?: string[] }).revealedEntries))
+      .toEqual([externalPath, path.join(target, 'engine1')]);
+    await page.locator('.page-scroll').evaluate((node) => node.scrollTo(0, 0));
+    await page.screenshot({ path: test.info().outputPath('effective-skills-expanded.png'), fullPage: true, animations: 'disabled' });
+    await engineering.getByRole('button', { name: '折叠 Engineering', exact: true }).click();
+    await expect(engineering.locator('.agent-skill-card')).toHaveCount(0);
+    await expect(engineering.locator('.section-subtitle')).toHaveText('engine1、engine2、engine3 等');
+    await expect(design.locator('.agent-skill-card')).toHaveCount(2);
+    await page.screenshot({ path: test.info().outputPath('effective-skills-collapsed.png'), fullPage: true, animations: 'disabled' });
+    await page.getByRole('tab', { name: /Mirror Agent/ }).click();
+    await expect(engineering.locator('.agent-skill-card')).toHaveCount(4);
+    await page.getByRole('tab', { name: /Effective Agent/ }).click();
+    await expect(engineering.locator('.agent-skill-card')).toHaveCount(0);
+    await page.getByRole('tab', { name: '工作区级', exact: true }).click();
+    await expect(engineering.locator('.agent-skill-card')).toHaveCount(4);
+    await page.getByRole('button', { name: '全部折叠', exact: true }).click();
+    await expect(page.locator('.agent-skill-card')).toHaveCount(0);
+    await page.getByRole('button', { name: '全部展开', exact: true }).click();
+    await expect(engineering.locator('.agent-skill-card')).toHaveCount(4);
+    await engineering.getByRole('button', { name: '折叠 Engineering', exact: true }).click();
+    const picker = page.getByRole('button', { name: '选择工作区', exact: true });
+    await picker.click();
+    // Pick the other recorded workspace by its full path, then return to the original one.
+    const currentPath = await page.getByRole('option', { selected: true }).locator('small').getAttribute('title');
+    const nextPath = currentPath === workspace ? otherWorkspace : workspace;
+    await page.getByRole('option').filter({ hasText: nextPath }).click();
+    await expect(engineering.locator('.agent-skill-card')).toHaveCount(4);
+    await picker.click();
+    await page.getByRole('option').filter({ hasText: currentPath! }).click();
+    await expect(engineering.locator('.agent-skill-card')).toHaveCount(0);
+    await page.getByRole('tab', { name: '用户级', exact: true }).click();
+    // User-level state also includes the selected workspace identity.
+    await page.getByRole('button', { name: '全部展开', exact: true }).click();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await expect(page.locator('.settings-footer')).toContainText(`本机技能管理 · 版本 v${packageJson.version}`);
   } finally {
     await app?.close();
     await rm(root, { recursive: true, force: true });

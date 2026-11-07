@@ -130,3 +130,7 @@ Actions 使用 Windows x64 和 macOS Apple Silicon 原生运行器构建，检�
 运行 `npm audit --omit=dev` 检查随应用分发的运行时依赖；用 `npm audit` 同时检查开发与打包工具。当前运行时依赖审查无告警。锁定的 electron-builder 26.15.3 仍通过其下载工具的 `global-agent` / `roarr` 链引入 `sprintf-js`，被 npm 记录为中等级拒绝服务告警；该链属于构建依赖，不会打入应用主进程或 renderer。
 
 当前 npm 建议通过强制降级 electron-builder 来避开该链，这会改变本项目已验证的打包 API，因此不自动执行 `npm audit fix --force`。更新构建工具或依赖覆盖规则时，需要重新验证下载、代理环境及两种操作系统的打包流程。
+
+## 应用内更新
+
+应用使用 GitHub Releases 自建更新，不依赖签名、Squirrel.Mac 或 electron-updater。机制、平台限制、恢复日志和 `HARNESS_UPDATE_FEED_URL` 本地验收方法见[应用更新](updates.md)。现有 Release 工作流与附件清单保持不变。

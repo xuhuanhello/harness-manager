@@ -1,9 +1,15 @@
+import { compareNames } from '../i18n';
+import { t, useT } from '../i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownToLine, ArrowRight, ExternalLink, FolderOpen, FolderPlus, HardDrive, ShieldCheck, Sparkles } from 'lucide-react';
 import type { Distribution, ExternalSkill, Scope, Snapshot } from '../../shared/types';
 import type { ManagedHarnessEntry } from '../view-types';
 import { initial, harnessGlyph } from '../format';
 import { WorkspacePicker } from '../components/WorkspacePicker';
+import ListActions from '../components/ListActions';
+import { RevealSkillButton } from '../components/RevealSkillButton';
+import { SectionHeading } from '../components/SectionHeading';
+import { buildEffectiveSections, effectiveCounts, effectiveLabels, effectiveSectionKey, effectiveSummary } from '../effective-sections';
 
 export function harnessInstallations(snapshot: Snapshot, harnessId: string, scope: Scope, workspaceId: string): ManagedHarnessEntry[] {
   if (snapshot.visibleManagedSkills)
@@ -37,14 +43,21 @@ export function harnessInstallations(snapshot: Snapshot, harnessId: string, scop
 }
 
 export function distributionStatus(distribution?: Distribution) {
-  if (!distribution) return '状态待检查';
+  if (!distribution) return t('agentHarness.needsChecking');
   if (distribution.health !== 'healthy')
-    return ({ missing: '缺失', broken: '损坏', stale: '待同步', conflict: '存在冲突' } as const)[distribution.health];
+    return (
+      {
+        missing: t('agentHarness.missing'),
+        broken: t('agentHarness.damaged'),
+        stale: t('agentHarness.outOfSync'),
+        conflict: t('agentHarness.conflictsFound'),
+      } as const
+    )[distribution.health];
   return distribution.verification === 'passed'
-    ? '正常 · 验证通过'
+    ? t('agentHarness.healthyVerified')
     : distribution.verification === 'failed'
-      ? '正常 · 验证失败'
-      : '正常 · 未验证';
+      ? t('agentHarness.healthyVerificationFailed')
+      : t('agentHarness.healthyNotVerified');
 }
 
 export function EmptyHarness({
@@ -58,22 +71,24 @@ export function EmptyHarness({
   onApply: () => void;
   onOpenHarness: () => void;
 }) {
-  const name =
-    harnessId === 'universal' ? '用户级通用技能' : snapshot.harnesses.find((harness) => harness.id === harnessId)?.name || 'Harness';
+  const t = useT();
+  const name = snapshot.harnesses.find((harness) => harness.id === harnessId)?.name || 'Harness';
   return (
     <div className="empty-harness">
       <div className="empty-harness-icon">
         <HardDrive size={21} />
       </div>
       <div>
-        <strong>{name} 暂无受管安装</strong>
-        <p>从中央库选择技能后应用到此目标。目录中由其他工具安装的外部技能，可在 Agent Harness 页面查看和迁移。</p>
+        <strong>{t('agentHarness.emptyManaged', { name })}</strong>
+        <p>{t('agentHarness.selectSkillsFromTheLibraryAndApplyThemHereYou')}</p>
         <div className="empty-harness-actions">
           <button className="text-button" onClick={onApply}>
-            立即选择技能 <ArrowRight size={14} />
+            {t('agentHarness.chooseSkills')}
+            <ArrowRight size={14} />
           </button>
           <button className="text-button muted" onClick={onOpenHarness}>
-            查看 Agent Harness <ArrowRight size={14} />
+            {t('agentHarness.viewAgentHarness')}
+            <ArrowRight size={14} />
           </button>
         </div>
       </div>
@@ -85,26 +100,36 @@ export function AgentHarnessPage({
   snapshot,
   busy,
   onMigrate,
+  onRevealExternal,
+  onRevealDistribution,
   onApply,
   onOpenWorkspaces,
+  onManageLibrary,
+  onManageWorkspace,
 }: {
   snapshot: Snapshot;
   busy: string;
   onMigrate: (skill: ExternalSkill) => void;
+  onRevealExternal: (externalSkillId: string) => void;
+  onRevealDistribution: (distributionId: string) => void;
   onApply: () => void;
   onOpenWorkspaces: () => void;
+  onManageLibrary: (harnessId: string) => void;
+  onManageWorkspace: (path: string) => void;
 }) {
+  const t = useT();
   const harnesses = useMemo(() => {
     const list = [...snapshot.harnesses];
-    return list.sort((a, b) => (a.id === 'universal' ? -1 : b.id === 'universal' ? 1 : a.name.localeCompare(b.name)));
+    return list.sort((a, b) => (a.id === 'universal' ? -1 : b.id === 'universal' ? 1 : compareNames(a.name, b.name)));
   }, [snapshot.harnesses]);
   const [harnessId, setHarnessId] = useState('universal');
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [scope, setScope] = useState<Scope>('user');
   const [workspaceId, setWorkspaceId] = useState(snapshot.workspaces[0]?.id || '');
   const harness = harnesses.find((item) => item.id === harnessId) ||
     harnesses[0] || {
       id: 'universal',
-      name: '用户级通用',
+      name: t('agentHarness.sharedUserScope'),
       icon: 'globe',
       userSkillsPath: '~/.agents/skills',
       workspaceSkillsRelativePath: '',
@@ -120,27 +145,46 @@ export function AgentHarnessPage({
     if (!workspaceId && snapshot.workspaces[0]) setWorkspaceId(snapshot.workspaces[0].id);
   }, [snapshot.workspaces, workspaceId]);
 
-  const managed = useMemo(() => harnessInstallations(snapshot, harnessId, scope, workspaceId), [snapshot, harnessId, scope, workspaceId]);
+  const managed = useMemo(
+    () => harnessInstallations(snapshot, harnessId, scope, workspaceId).sort((a, b) => compareNames(a.skill.name, b.skill.name)),
+    [snapshot, harnessId, scope, workspaceId],
+  );
   const external = useMemo(
     () =>
-      (snapshot.visibleExternalSkills ?? snapshot.externalSkills).filter(
-        (skill) => skill.harnessId === harnessId && skill.scope === scope && (scope === 'user' || skill.workspaceId === workspaceId),
-      ),
+      (snapshot.visibleExternalSkills ?? snapshot.externalSkills)
+        .filter(
+          (skill) => skill.harnessId === harnessId && skill.scope === scope && (scope === 'user' || skill.workspaceId === workspaceId),
+        )
+        .sort((a, b) => compareNames(a.name, b.name)),
     [snapshot.visibleExternalSkills, snapshot.externalSkills, harnessId, scope, workspaceId],
   );
+  const sections = useMemo(() => buildEffectiveSections(snapshot, managed, external), [snapshot, managed, external]);
+  const counts = effectiveCounts(managed, external);
+  const sectionKey = (id: string) => effectiveSectionKey(harnessId, scope, workspaceId, id);
+  const allExpanded = sections.every((section) => !collapsed.has(sectionKey(section.id)));
+  const toggleSections = (ids: string[], collapse: boolean) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      for (const id of ids) {
+        if (collapse) next.add(sectionKey(id));
+        else next.delete(sectionKey(id));
+      }
+      return next;
+    });
+  };
   const activePath = scope === 'user' ? harness.userSkillsPath : harness.workspaceSkillsRelativePath;
   const scopeUnavailable = scope === 'workspace' && !harness.workspaceSkillsRelativePath.trim() && !harness.readsWorkspaceAgents;
   const countForHarness = (id: string) =>
-    harnessInstallations(snapshot, id, scope, workspaceId).length +
+    new Set(harnessInstallations(snapshot, id, scope, workspaceId).map((entry) => entry.skill.id)).size +
     (snapshot.visibleExternalSkills ?? snapshot.externalSkills).filter(
       (skill) => skill.harnessId === id && skill.scope === scope && (scope === 'user' || skill.workspaceId === workspaceId),
     ).length;
 
-  if (!harnesses.length) return <div className="section-empty">尚未启用任何 Harness，请在设置中开启需要管理的工具。</div>;
+  if (!harnesses.length) return <div className="section-empty">{t('agentHarness.noHarnessesEnabledEnableTheToolsYouWantToManage')}</div>;
   return (
     <div className="agent-harness-page">
       <div className="agent-harness-toolbar">
-        <div className="agent-harness-tabs" role="tablist" aria-label="选择 Harness">
+        <div className="agent-harness-tabs" role="tablist" aria-label={t('agentHarness.chooseHarness')}>
           {harnesses.map((item) => (
             <button
               key={item.id}
@@ -156,7 +200,7 @@ export function AgentHarnessPage({
           ))}
         </div>
         <div className="agent-harness-filters">
-          <div className="agent-scope-tabs" role="tablist" aria-label="选择技能作用域">
+          <div className="agent-scope-tabs" role="tablist" aria-label={t('agentHarness.chooseSkillScope')}>
             <button
               role="tab"
               aria-selected={scope === 'user'}
@@ -164,7 +208,7 @@ export function AgentHarnessPage({
               onClick={() => setScope('user')}
             >
               <HardDrive size={14} />
-              用户级
+              {t('agentHarness.user')}
             </button>
             <button
               role="tab"
@@ -173,7 +217,7 @@ export function AgentHarnessPage({
               onClick={() => setScope('workspace')}
             >
               <FolderOpen size={14} />
-              工作区级
+              {t('agentHarness.workspace')}
             </button>
           </div>
           {scope === 'workspace' && <WorkspacePicker workspaces={snapshot.workspaces} value={workspaceId} onChange={setWorkspaceId} />}
@@ -186,13 +230,13 @@ export function AgentHarnessPage({
           <strong>{harness.name}</strong>
           <span>
             {scope === 'user'
-              ? '按目录规范可用 · 尚未验证工具实际加载'
+              ? t('agentHarness.availableByDirectoryRulesToolLoadingNotYetVerified')
               : workspace
-                ? `${workspace.name || '工作区'} · ${workspace.path}`
-                : '从已知工作区中选择一个目录'}
+                ? `${workspace.name || t('agentHarness.workspaces')} · ${workspace.path}`
+                : t('agentHarness.chooseAKnownWorkspaceDirectory')}
           </span>
         </div>
-        <code title={activePath}>{activePath || '此 Harness 未配置此作用域的技能目录'}</code>
+        <code title={activePath}>{activePath || t('agentHarness.thisHarnessHasNoSkillDirectoryConfiguredForThisScope')}</code>
       </div>
 
       {scope === 'workspace' && !snapshot.workspaces.length ? (
@@ -200,11 +244,11 @@ export function AgentHarnessPage({
           <div className="agent-empty-icon">
             <FolderOpen size={20} />
           </div>
-          <strong>还没有已知工作区</strong>
-          <p>已应用过技能的工作区会显示在这里。</p>
+          <strong>{t('agentHarness.noKnownWorkspacesYet')}</strong>
+          <p>{t('agentHarness.workspacesWhereYouHaveAppliedSkillsWillAppearHere')}</p>
           <button className="button subtle" onClick={onOpenWorkspaces}>
             <FolderPlus size={14} />
-            前往工作区
+            {t('agentHarness.goToWorkspaces')}
           </button>
         </div>
       ) : scope === 'workspace' && !workspace ? (
@@ -212,86 +256,147 @@ export function AgentHarnessPage({
           <div className="agent-empty-icon">
             <FolderOpen size={20} />
           </div>
-          <strong>选择一个工作区</strong>
-          <p>只显示已记录的本地工作区及其 Harness 配置。</p>
+          <strong>{t('agentHarness.chooseAWorkspace')}</strong>
+          <p>{t('agentHarness.onlyRegisteredLocalWorkspacesAndTheirHarnessSettingsAreShown')}</p>
         </div>
       ) : scopeUnavailable ? (
         <div className="agent-harness-empty">
           <div className="agent-empty-icon">
             <HardDrive size={20} />
           </div>
-          <strong>{harness.name} 未配置工作区目录</strong>
-          <p>在设置中为此 Harness 声明工作区级技能后，就能在这里查看安装。</p>
+          <strong>{t('agentHarness.workspaceNotConfigured', { name: harness.name })}</strong>
+          <p>{t('agentHarness.configureWorkspaceSkillsForThisHarnessInSettingsToView')}</p>
         </div>
       ) : (
         <>
-          {!!managed.length && (
+          {counts.total > 0 && (
             <section className="agent-skill-section">
               <div className="agent-section-heading">
                 <div>
-                  <h2>受管技能</h2>
-                  <p>{managed.length} 个技能由中央技能库管理。</p>
+                  <h2>{effectiveLabels.title}</h2>
+                  <p>{effectiveSummary(harness.name, counts)}</p>
                 </div>
-                <span className="agent-section-count">{managed.length}</span>
-              </div>
-              <div className="agent-skill-grid">
-                {managed.map(({ bindingId, skill, distribution, path, inheritedFrom }) => (
-                  <article className="agent-skill-card" key={`${bindingId}:${skill.id}`}>
-                    <span className="agent-skill-avatar">{initial(skill.name)}</span>
-                    <div className="agent-skill-copy">
-                      <div className="agent-skill-title">
-                        <strong>{skill.name}</strong>
-                        {inheritedFrom && <span className="inheritance-tag">继承自 {inheritedFrom}</span>}
-                        <span className="agent-managed-badge">
-                          <ShieldCheck size={12} />
-                          中央仓库托管
-                        </span>
-                      </div>
-                      <p>{skill.description || '暂无描述。'}</p>
-                      <div className="agent-skill-details">
-                        <code title={path}>{path || '安装路径未知'}</code>
-                        <span>
-                          {distribution?.strategy === 'copy' ? '复制安装' : '软链'} · {distributionStatus(distribution)}
-                        </span>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
-          {!!external.length && (
-            <section className="agent-skill-section external-agent-section">
-              <div className="agent-section-heading">
-                <div>
-                  <h2>外部技能</h2>
-                  <p>这些技能当前由 Harness 目录中的原有内容提供。</p>
+                <div className="agent-section-actions">
+                  {counts.managed > 0 && (
+                    <button
+                      className="text-button"
+                      onClick={() => (scope === 'user' ? onManageLibrary(harnessId) : workspace && onManageWorkspace(workspace.path))}
+                    >
+                      {scope === 'user' ? t('agentHarness.manageInLibrary') : t('agentHarness.manageInWorkspace')}
+                    </button>
+                  )}
+                  <span className="agent-section-count">{counts.total}</span>
+                  <ListActions
+                    allExpanded={allExpanded}
+                    expandableCount={sections.length}
+                    onToggleExpanded={() =>
+                      toggleSections(
+                        sections.map((section) => section.id),
+                        allExpanded,
+                      )
+                    }
+                  />
                 </div>
-                <span className="agent-section-count">{external.length}</span>
               </div>
-              <div className="agent-skill-grid">
-                {external.map((skill) => (
-                  <article className="agent-skill-card external-agent-card" key={skill.id}>
-                    <span className="agent-skill-avatar external-avatar">
-                      <ExternalLink size={16} />
-                    </span>
-                    <div className="agent-skill-copy">
-                      <div className="agent-skill-title">
-                        <strong>{skill.name}</strong>
-                        {skill.inheritedFrom && <span className="inheritance-tag">继承自 {skill.inheritedFrom}</span>}
-                        <span className="external-badge">外部管理</span>
-                      </div>
-                      <p>{skill.description || '暂无描述。'}</p>
-                      <div className="agent-skill-details">
-                        <code title={skill.path}>{skill.path}</code>
-                        <button className="button subtle compact" disabled={!!busy} onClick={() => onMigrate(skill)}>
-                          <ArrowRight size={13} />
-                          迁移到中央仓库管理
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                ))}
+              <div className="effective-sections">
+                {sections.map((section) => {
+                  const isCollapsed = collapsed.has(sectionKey(section.id));
+                  return (
+                    <section
+                      className={`skill-section effective-section ${section.kind === 'external' ? 'external-agent-section' : ''}`}
+                      key={section.id}
+                    >
+                      <SectionHeading
+                        label={section.label}
+                        kind={section.kind === 'external' ? 'external' : 'group'}
+                        icon={
+                          section.kind === 'external' ? (
+                            <ExternalLink size={15} />
+                          ) : (
+                            <span
+                              className="section-dot"
+                              style={section.color !== 'neutral' ? { backgroundColor: section.color } : undefined}
+                            />
+                          )
+                        }
+                        count={t('agentHarness.items', { count: section.count })}
+                        names={section.names}
+                        subtitle={section.kind === 'external' ? t('agentHarness.externallyManaged') : t('agentHarness.groups')}
+                        collapsed={isCollapsed}
+                        onToggle={() => toggleSections([section.id], !isCollapsed)}
+                      />
+                      {!isCollapsed && (
+                        <div className="agent-skill-grid">
+                          {section.kind === 'managed'
+                            ? section.entries.map(({ bindingId, skill, distribution, path, inheritedFrom }) => (
+                                <article className="agent-skill-card" key={`${bindingId}:${skill.id}`}>
+                                  <span className="agent-skill-avatar">{initial(skill.name)}</span>
+                                  <div className="agent-skill-copy">
+                                    <div className="agent-skill-title">
+                                      <strong>{skill.name}</strong>
+                                      {inheritedFrom && (
+                                        <span className="inheritance-tag">
+                                          {t('agentHarness.inheritedSource', { name: inheritedFrom })}
+                                        </span>
+                                      )}
+                                      <span className="agent-managed-badge">
+                                        <ShieldCheck size={12} />
+                                        {t('agentHarness.libraryManaged2')}
+                                      </span>
+                                    </div>
+                                    <p>{skill.description || t('agentHarness.noDescription')}</p>
+                                    <div className="agent-skill-details">
+                                      <code title={path}>{path || t('agentHarness.unknownInstallationPath')}</code>
+                                      <span>
+                                        {t('agentHarness.installationStatus', {
+                                          strategy:
+                                            distribution?.strategy === 'copy'
+                                              ? t('agentHarness.copyInstallation')
+                                              : t('agentHarness.symlink'),
+                                          status: distributionStatus(distribution),
+                                        })}
+                                      </span>
+                                      <RevealSkillButton
+                                        name={skill.name}
+                                        disabled={!!busy || !distribution}
+                                        onReveal={() => distribution && onRevealDistribution(distribution.id)}
+                                      />
+                                    </div>
+                                  </div>
+                                </article>
+                              ))
+                            : section.entries.map((skill) => (
+                                <article className="agent-skill-card external-agent-card" key={skill.id}>
+                                  <span className="agent-skill-avatar external-avatar">
+                                    <ExternalLink size={16} />
+                                  </span>
+                                  <div className="agent-skill-copy">
+                                    <div className="agent-skill-title">
+                                      <strong>{skill.name}</strong>
+                                      {skill.inheritedFrom && (
+                                        <span className="inheritance-tag">
+                                          {t('agentHarness.inheritedSource', { name: skill.inheritedFrom })}
+                                        </span>
+                                      )}
+                                      <span className="external-badge">{t('agentHarness.externallyManaged')}</span>
+                                    </div>
+                                    <p>{skill.description || t('agentHarness.noDescription')}</p>
+                                    <div className="agent-skill-details">
+                                      <code title={skill.path}>{skill.path}</code>
+                                      <RevealSkillButton name={skill.name} disabled={!!busy} onReveal={() => onRevealExternal(skill.id)} />
+                                      <button className="button subtle compact" disabled={!!busy} onClick={() => onMigrate(skill)}>
+                                        <ArrowRight size={13} />
+                                        {t('agentHarness.migrateToLibrary')}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </article>
+                              ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
               </div>
             </section>
           )}
@@ -300,11 +405,11 @@ export function AgentHarnessPage({
               <div className="agent-empty-icon">
                 <Sparkles size={20} />
               </div>
-              <strong>此目标还没有技能</strong>
-              <p>中央仓库托管的技能和外部管理的技能会在这里分别显示。</p>
+              <strong>{t('agentHarness.noSkillsInThisDestinationYet')}</strong>
+              <p>{t('agentHarness.libraryManagedAndExternallyManagedSkillsWillAppearSeparatelyHere')}</p>
               <button className="button primary" onClick={onApply}>
                 <ArrowDownToLine size={14} />
-                从中央技能库选择
+                {t('agentHarness.chooseFromLibrary')}
               </button>
             </div>
           )}

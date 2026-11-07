@@ -1,3 +1,5 @@
+import { harnessDisplayName } from '../shared/harness-registry';
+import { t, currentLocale } from '../shared/i18n';
 import { randomUUID } from 'node:crypto';
 import { constants, type Dirent, type Stats } from 'node:fs';
 import { execFile as nodeExecFile } from 'node:child_process';
@@ -248,7 +250,8 @@ export class HarnessInstallationService {
     );
     for (const result of results) {
       const harness = everyHarness.find((item) => item.id === result.harnessId);
-      if (harness) this.cache.set(harness.id, { key: definitionKey(harness), expiresAt: this.now() + this.cacheMs, result });
+      if (harness)
+        this.cache.set(harness.id, { key: `${currentLocale()}:${definitionKey(harness)}`, expiresAt: this.now() + this.cacheMs, result });
     }
     return results.map((result) => structuredClone(result));
   }
@@ -274,7 +277,7 @@ export class HarnessInstallationService {
         path: request.path,
         classification: 'unknown',
         canTrash: false,
-        reason: '无法确认该目录属于当前 Harness 的技能根目录。',
+        reason: t('installation.cannotVerifyThatThisDirectoryIsASkillRootFor'),
       };
     }
     if (!isHarnessEnabled(harness)) {
@@ -283,7 +286,7 @@ export class HarnessInstallationService {
         path: requestedPath,
         classification: 'active',
         canTrash: false,
-        reason: '此 Harness 已禁用；禁用状态不会授权清理其目录。',
+        reason: t('installation.thisHarnessIsDisabledDisablingDoesNotAuthorizeDirectoryCleanup'),
       };
     }
     const allHarnesses = this.allStoredHarnesses([harness]);
@@ -295,7 +298,10 @@ export class HarnessInstallationService {
         path: requestedPath,
         classification: status === 'installed' ? 'active' : 'unknown',
         canTrash: false,
-        reason: status === 'installed' ? '应用已检测为已安装；不会清理其技能目录。' : '应用安装状态无法确认；为保护数据，不允许清理。',
+        reason:
+          status === 'installed'
+            ? t('installation.theAppIsInstalledItsSkillDirectoriesWillNotBe')
+            : t('installation.installationStatusIsUnknownCleanupIsUnavailableToProtectYour'),
       };
     }
     const candidate = (await this.candidateRoots([harness], status)).find((item) => path.resolve(item.path) === requestedPath);
@@ -305,7 +311,7 @@ export class HarnessInstallationService {
         path: requestedPath,
         classification: 'protected',
         canTrash: false,
-        reason: '只能清理当前 Harness 注册的技能根目录。',
+        reason: t('installation.onlyRegisteredSkillRootsForThisHarnessCanBeCleaned'),
       };
     }
     const sharedReader = await this.sharedReaderReason(candidate, allHarnesses);
@@ -362,7 +368,7 @@ export class HarnessInstallationService {
   }
 
   private async detectOne(harness: Harness, refresh: boolean): Promise<HarnessInstallationResult> {
-    const key = definitionKey(harness);
+    const key = `${currentLocale()}:${definitionKey(harness)}`;
     const cached = this.cache.get(harness.id);
     if (!refresh && cached && cached.key === key && cached.expiresAt > this.now()) return structuredClone(cached.result);
     const inFlightKey = `${harness.id}\0${key}`;
@@ -392,8 +398,8 @@ export class HarnessInstallationService {
             canTrash: false,
             detail:
               detection.status === 'installed'
-                ? 'Harness 已检测为已安装；不会清理此技能目录。'
-                : 'Harness 安装状态无法确认；为保护数据，不允许清理。',
+                ? t('installation.theHarnessIsInstalledThisSkillDirectoryWillNotBe')
+                : t('installation.harnessInstallationStatusIsUnknownCleanupIsUnavailableToProtect'),
           };
         }
         const inspection = await this.inspectRoot(root);
@@ -415,14 +421,15 @@ export class HarnessInstallationService {
   private async findInstallation(
     harness: Harness,
   ): Promise<Pick<HarnessInstallationResult, 'status' | 'method' | 'executable' | 'version' | 'reason'>> {
-    if (harness.kind === 'universal') return { status: 'unknown', reason: '通用技能目标没有独立的应用程序可供检测。' };
+    if (harness.kind === 'universal')
+      return { status: 'unknown', reason: t('installation.theSharedSkillDestinationHasNoSeparateAppToDetect') };
     const extensionIds = pathEntries(harness.extensionIds).map((id) => id.toLocaleLowerCase('en-US'));
     if (extensionIds.length) return this.findEditorExtension(harness, extensionIds);
     const command = typeof harness.command === 'string' ? harness.command.trim() : '';
     const executablePaths = pathEntries(harness.executablePaths);
     const appPaths = pathEntries(harness.appPaths);
     const hasDetectionDefinition = !!command || executablePaths.length > 0 || appPaths.length > 0;
-    if (!hasDetectionDefinition) return { status: 'unknown', reason: '此 Harness 尚未配置可检测的命令或应用程序路径。' };
+    if (!hasDetectionDefinition) return { status: 'unknown', reason: t('installation.noDetectionCommandOrAppPathIsConfiguredForThis') };
 
     let uncertain = false;
     const candidates = await this.resolveExecutableCandidates(command, executablePaths);
@@ -470,7 +477,7 @@ export class HarnessInstallationService {
     }
 
     if (appPaths.length && this.platform !== 'darwin' && !candidates.length) {
-      return { status: 'unknown', reason: '此应用只配置了 macOS 应用包路径；当前系统无法据此判断是否已安装。' };
+      return { status: 'unknown', reason: t('installation.onlyMacosAppBundlePathsAreConfiguredTheyCannotEstablish') };
     }
 
     if (this.platform === 'darwin' && appPaths.length) {
@@ -487,8 +494,8 @@ export class HarnessInstallationService {
       }
     }
 
-    if (uncertain) return { status: 'unknown', reason: '找到了候选程序，但无法在安全的时间或输出限制内验证版本。' };
-    return { status: 'not-found', reason: '未在 PATH、常见程序目录或已保存的可执行路径中找到可验证的应用。' };
+    if (uncertain) return { status: 'unknown', reason: t('installation.aCandidateProgramWasFoundButItsVersionCouldNot') };
+    return { status: 'not-found', reason: t('installation.noVerifiableAppFoundInPathCommonProgramDirectoriesOr') };
   }
 
   private async findEditorExtension(
@@ -547,8 +554,16 @@ export class HarnessInstallationService {
       }
     }
     return couldNotRead
-      ? { status: 'unknown', method: 'editor-extension', reason: '无法完整读取编辑器扩展清单；未确认插件是否安装。' }
-      : { status: 'not-found', method: 'editor-extension', reason: '在已知扩展清单目录中没有找到匹配的插件 ID。' };
+      ? {
+          status: 'unknown',
+          method: 'editor-extension',
+          reason: t('installation.couldNotFullyReadEditorExtensionManifestsInstallationStatusIs'),
+        }
+      : {
+          status: 'not-found',
+          method: 'editor-extension',
+          reason: t('installation.noMatchingPluginIdFoundInKnownExtensionManifestDirectories'),
+        };
   }
 
   private async resolveExecutableCandidates(command: string, configuredPaths: string[]): Promise<string[]> {
@@ -903,28 +918,44 @@ export class HarnessInstallationService {
 
   private async inspectInventoryOnlyRoot(rootPath: string): Promise<Inspection> {
     if (overlaps(rootPath, this.store.root))
-      return { classification: 'central-library', canTrash: false, detail: '工具配置目录与中央技能库重叠；不会清理。' };
+      return {
+        classification: 'central-library',
+        canTrash: false,
+        detail: t('installation.theToolConfigurationDirectoryOverlapsTheLibraryItWillNot'),
+      };
     let info: Stats;
     try {
       info = await lstat(rootPath);
     } catch (cause) {
       return isMissingEntryError(cause)
-        ? { classification: 'missing', canTrash: false, detail: '工具配置目录已不存在。' }
-        : { classification: 'unknown', canTrash: false, detail: `无法检查工具配置目录：${errorMessage(cause)}` };
+        ? { classification: 'missing', canTrash: false, detail: t('installation.theToolConfigurationDirectoryNoLongerExists') }
+        : {
+            classification: 'unknown',
+            canTrash: false,
+            detail: t('installation.couldNotInspectTheToolConfigurationDirectory', { reason: errorMessage(cause) }),
+          };
     }
     if (info.isSymbolicLink() || !info.isDirectory())
-      return { classification: 'protected', canTrash: false, detail: '工具配置根目录不是普通目录；不会清理。' };
+      return { classification: 'protected', canTrash: false, detail: t('installation.theToolConfigurationRootIsNotARegularDirectoryIt') };
     try {
       const entries = await readdir(rootPath, { withFileTypes: true });
       return entries.length
         ? {
             classification: 'contains-data',
             canTrash: false,
-            detail: '技能目录不存在，但此工具的专属配置或缓存目录仍有内容。可在访达中查看；不会自动清理。',
+            detail: t('installation.theSkillDirectoryIsMissingButTheToolConfigurationOr'),
           }
-        : { classification: 'protected', canTrash: false, detail: '技能目录和配置内容均为空；工具配置根目录仍受保护，不会清理。' };
+        : {
+            classification: 'protected',
+            canTrash: false,
+            detail: t('installation.skillAndConfigurationContentsAreEmptyTheConfigurationRootIs'),
+          };
     } catch (cause) {
-      return { classification: 'unknown', canTrash: false, detail: `无法读取工具配置目录：${errorMessage(cause)}` };
+      return {
+        classification: 'unknown',
+        canTrash: false,
+        detail: t('installation.couldNotReadTheToolConfigurationDirectory', { reason: errorMessage(cause) }),
+      };
     }
   }
 
@@ -938,28 +969,43 @@ export class HarnessInstallationService {
     try {
       rootInfo = await lstat(candidate.path);
     } catch (cause) {
-      if (isMissingEntryError(cause)) return { classification: 'missing', canTrash: false, detail: '此技能根目录已不存在。' };
-      return { classification: 'unknown', canTrash: false, detail: `无法检查目录：${errorMessage(cause)}` };
+      if (isMissingEntryError(cause))
+        return { classification: 'missing', canTrash: false, detail: t('installation.thisSkillRootNoLongerExists') };
+      return {
+        classification: 'unknown',
+        canTrash: false,
+        detail: t('installation.couldNotInspectDirectory', { reason: errorMessage(cause) }),
+      };
     }
     if (rootInfo.isSymbolicLink())
-      return { classification: 'protected', canTrash: false, detail: '技能根目录本身是符号链接；为避免触及真实数据，不会清理。' };
-    if (!rootInfo.isDirectory()) return { classification: 'protected', canTrash: false, detail: '目标不是普通目录；不会清理。' };
+      return { classification: 'protected', canTrash: false, detail: t('installation.theSkillRootIsItselfASymlinkItWillBe') };
+    if (!rootInfo.isDirectory())
+      return { classification: 'protected', canTrash: false, detail: t('installation.theDestinationIsNotARegularDirectoryItWillBe') };
     let entries: Dirent[];
     try {
       entries = await readdir(candidate.path, { withFileTypes: true });
     } catch (cause) {
-      return { classification: 'unknown', canTrash: false, detail: `无法读取目录内容：${errorMessage(cause)}` };
+      return {
+        classification: 'unknown',
+        canTrash: false,
+        detail: t('installation.couldNotReadDirectoryContents', { reason: errorMessage(cause) }),
+      };
     }
     const baseFingerprint = [rootInfo.dev, rootInfo.ino, rootInfo.mode, rootInfo.mtimeMs, rootInfo.ctimeMs].join(':');
     if (!entries.length) {
       const fingerprint = `${path.resolve(candidate.path)}\0${baseFingerprint}\0empty`;
-      return { classification: 'empty', canTrash: true, detail: '目录为空；确认后只会将这个技能根目录移入系统废纸篓。', fingerprint };
+      return {
+        classification: 'empty',
+        canTrash: true,
+        detail: t('installation.theDirectoryIsEmptyConfirmToMoveOnlyThisSkill'),
+        fingerprint,
+      };
     }
     if (!entries.every((entry) => entry.isSymbolicLink())) {
       return {
         classification: 'contains-data',
         canTrash: false,
-        detail: '目录中包含实体文件或子目录。请在访达中查看；此工具不会自动清理实体技能。',
+        detail: t('installation.theDirectoryContainsFilesOrSubdirectoriesInspectItInYour'),
       };
     }
     const signatures: string[] = [];
@@ -969,10 +1015,18 @@ export class HarnessInstallationService {
       try {
         info = await lstat(entryPath);
       } catch (cause) {
-        return { classification: 'unknown', canTrash: false, detail: `无法再次验证链接 ${entry.name}：${errorMessage(cause)}` };
+        return {
+          classification: 'unknown',
+          canTrash: false,
+          detail: t('installation.couldNotVerifyLinkAgain', { name: entry.name, reason: errorMessage(cause) }),
+        };
       }
       if (!info.isSymbolicLink())
-        return { classification: 'contains-data', canTrash: false, detail: '目录内容在检查时发生变化，请重新检查。' };
+        return {
+          classification: 'contains-data',
+          canTrash: false,
+          detail: t('installation.directoryContentsChangedDuringInspectionCheckAgain'),
+        };
       const linkText = await readlink(entryPath)
         .catch((cause) => {
           throw appError('RESIDUAL_LINK_UNREADABLE', { name: entry.name, reason: errorMessage(cause) });
@@ -982,16 +1036,20 @@ export class HarnessInstallationService {
       signatures.push(`${entry.name}:${info.dev}:${info.ino}:${info.mode}:${info.mtimeMs}:${linkText}`);
       const linkPath = path.resolve(candidate.path, linkText);
       if (await this.pointsIntoLibrary(linkPath))
-        return { classification: 'central-library', canTrash: false, detail: '目录中的链接指向中央技能库；不会触及中央库或其入口。' };
+        return {
+          classification: 'central-library',
+          canTrash: false,
+          detail: t('installation.linksInThisDirectoryPointToTheLibraryTheLibrary'),
+        };
       if (await this.isLiveSkillLink(linkPath))
-        return { classification: 'active', canTrash: false, detail: '目录中的链接仍指向可用技能；为保留 Harness 当前入口，不会清理。' };
+        return { classification: 'active', canTrash: false, detail: t('installation.linksStillPointToAvailableSkillsTheDirectoryWillBe') };
     }
     const signature = signatures.sort().join('\0');
     const fingerprint = `${path.resolve(candidate.path)}\0${baseFingerprint}\0${signature}`;
     return {
       classification: 'symlink-only',
       canTrash: true,
-      detail: '目录只包含符号链接；确认后只会将该根目录及其链接入口移入系统废纸篓，不会跟随或删除链接目标。',
+      detail: t('installation.theDirectoryContainsOnlySymlinksConfirmToMoveTheRoot'),
       fingerprint,
     };
   }
@@ -1001,12 +1059,15 @@ export class HarnessInstallationService {
   ): Promise<{ classification: ResidualDirectoryClassification; detail: string } | undefined> {
     const resolved = path.resolve(targetPath);
     if (resolved === path.parse(resolved).root || resolved === this.home)
-      return { classification: 'protected', detail: '不会清理文件系统根目录或用户主目录。' };
+      return { classification: 'protected', detail: t('installation.fileSystemRootsAndHomeDirectoriesCannotBeCleanedUp') };
     const protectedAgentRoots = ['.codex', '.claude', '.agents'].map((name) => path.resolve(this.home, name));
     const safeSkillRoots = new Set(protectedAgentRoots.map((root) => path.resolve(root, 'skills')));
     for (const protectedRoot of protectedAgentRoots) {
       if (isWithin(resolved, protectedRoot) && !safeSkillRoots.has(resolved)) {
-        return { classification: 'protected', detail: `不会清理 ${path.basename(protectedRoot)} 配置根目录或认证数据。` };
+        return {
+          classification: 'protected',
+          detail: t('installation.theConfigurationRootAndAuthenticationDataWillBeKept', { value: path.basename(protectedRoot) }),
+        };
       }
     }
     try {
@@ -1014,14 +1075,19 @@ export class HarnessInstallationService {
       const canonicalHome = await realpath(this.home).catch(() => this.home);
       const expectedReal = isWithin(this.home, resolved) ? path.resolve(canonicalHome, path.relative(this.home, resolved)) : resolved;
       if (path.resolve(candidateReal) !== path.resolve(expectedReal)) {
-        return { classification: 'protected', detail: '目录路径经过符号链接重定向；为避免影响其它真实目录，不会清理。' };
+        return { classification: 'protected', detail: t('installation.theDirectoryPathIsRedirectedThroughASymlinkItWill') };
       }
       if (overlaps(candidateReal, libraryReal) || overlaps(resolved, this.store.root)) {
-        return { classification: 'central-library', detail: '目标与中央技能库重叠；不会清理。' };
+        return { classification: 'central-library', detail: t('installation.theDestinationOverlapsTheLibraryItWillBeKept') };
       }
     } catch (cause) {
-      if (!isMissingEntryError(cause)) return { classification: 'unknown', detail: `无法确认目录是否与中央库重叠：${errorMessage(cause)}` };
-      if (overlaps(resolved, this.store.root)) return { classification: 'central-library', detail: '目标与中央技能库重叠；不会清理。' };
+      if (!isMissingEntryError(cause))
+        return {
+          classification: 'unknown',
+          detail: t('installation.couldNotVerifyWhetherThisDirectoryOverlapsTheLibrary', { reason: errorMessage(cause) }),
+        };
+      if (overlaps(resolved, this.store.root))
+        return { classification: 'central-library', detail: t('installation.theDestinationOverlapsTheLibraryItWillBeKept') };
     }
     return undefined;
   }
@@ -1031,11 +1097,11 @@ export class HarnessInstallationService {
     const bindings = this.safeList<Binding>('bindings');
     const distributions = this.safeList<Distribution>('distributions');
     if (distributions.some((item) => item.entryPath && isWithin(targetPath, item.entryPath))) {
-      return '目录中存在中央库登记的受管分发；请先从对应 Harness 移除或迁移。';
+      return t('installation.thisDirectoryContainsManagedDistributionsRemoveOrMigrateThemFrom');
     }
     const activeTargetIds = new Set(bindings.map((item) => item.targetId));
     if (targets.some((target) => activeTargetIds.has(target.id) && target.path && overlaps(targetPath, target.path))) {
-      return '该目录仍被 Harness 安装绑定引用；请先从对应 Harness 移除或迁移。';
+      return t('installation.harnessInstallationBindingsStillReferenceThisDirectoryRemoveOrMigrate');
     }
     return undefined;
   }
@@ -1091,12 +1157,12 @@ export class HarnessInstallationService {
       if (!canReadCandidate) continue;
       const reason =
         rank === 0
-          ? `${peer.name} 已安装并读取此共享技能目录；不会清理。`
+          ? t('installation.isInstalledAndReadsThisSharedSkillDirectoryItWill', { name: harnessDisplayName(peer) })
           : rank === 1
-            ? '该目录属于多个工具共享的通用 Agents 技能目录；不会清理。'
+            ? t('installation.thisIsASharedAgentsSkillDirectoryUsedByMultiple')
             : rank === 2
-              ? `${peer.name} 的安装状态未确认，但它可能读取此共享目录；为保护数据，不允许清理。`
-              : `${peer.name} 已禁用，但仍登记为此共享技能目录的读取方；不会清理或修改该目录。`;
+              ? t('installation.mayReadThisSharedDirectoryAndItsInstallationStatusIs', { name: harnessDisplayName(peer) })
+              : t('installation.isDisabledButIsStillARegisteredReaderOfThis', { name: harnessDisplayName(peer) });
       best = { rank, reason };
       if (rank === 0) break;
     }

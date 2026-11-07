@@ -1,20 +1,22 @@
+import { useT } from '../i18n';
 import { ArrowRight, Check, CircleHelp, LoaderCircle, Plus, X } from 'lucide-react';
 import type { Group, Skill, Snapshot } from '../../shared/types';
 import ModalShell from '../components/ModalShell';
 import { InstallResults, SourceWizard } from '../components/SourceWizard';
-import { formatCount, initial, sourceName } from '../format';
+import { initial, sourceName } from '../format';
 import type { GroupDraft } from '../hooks/useGroupDraft';
 import type { LibraryView } from '../hooks/useLibraryView';
 import type { Shell } from '../hooks/useShell';
 import type { SourceWizardState } from '../hooks/useSourceWizard';
 
 export function FormError({ error, onDismiss }: { error: string; onDismiss: () => void }) {
+  const t = useT();
   if (!error) return null;
   return (
     <div className="form-error">
       <CircleHelp size={14} />
       {error}
-      <button onClick={onDismiss}>关闭</button>
+      <button onClick={onDismiss}>{t('dialogs.close')}</button>
     </div>
   );
 }
@@ -37,13 +39,14 @@ export function GroupPicker({
   placeholder: string;
   autoFocus?: boolean;
 }) {
+  const t = useT();
   return (
     <>
       {groups.length > 0 && (
         <label className="field-label">
           {selectLabel}
           <select className="form-input" value={draft.groupId} onChange={(event) => draft.chooseGroup(event.target.value)}>
-            <option value="">选择分组…</option>
+            <option value="">{t('dialogs.chooseAGroup')}</option>
             {groups.map((group) => (
               <option key={group.id} value={group.id}>
                 {group.name}
@@ -70,12 +73,13 @@ export function GroupPicker({
 }
 
 export function SourceDialog({ shell, wizard, groups }: { shell: Shell; wizard: SourceWizardState; groups: Group[] }) {
+  const t = useT();
   const { busy, error, setError, setDialog } = shell;
   return (
     <ModalShell
       locked={!!busy}
-      title={wizard.batchResult ? '安装结果' : '添加技能来源'}
-      subtitle={wizard.batchResult ? '按项显示本次安装状态。' : '扫描 GitHub 仓库或导入本地技能目录。'}
+      title={wizard.batchResult ? t('dialogs.importResults') : t('dialogs.addSkillSource')}
+      subtitle={wizard.batchResult ? t('dialogs.importStatusForEachItem') : t('dialogs.scanAGithubRepositoryOrImportALocalSkillDirectory')}
       onClose={wizard.close}
       size="wide"
     >
@@ -113,12 +117,13 @@ export function SourceDialog({ shell, wizard, groups }: { shell: Shell; wizard: 
 }
 
 export function OnboardingDialog({ shell, draft, groups }: { shell: Shell; draft: GroupDraft; groups: Group[] }) {
+  const t = useT();
   const { busy, error, setError } = shell;
   return (
     <ModalShell
       locked={!!busy}
-      title="为技能创建分组"
-      subtitle="分组是可选的业务组织方式，也可以稍后再整理。"
+      title={t('dialogs.groupYourSkills')}
+      subtitle={t('dialogs.groupsAreOptionalYouCanOrganizeYourSkillsLater')}
       onClose={draft.closeOnboarding}
     >
       <div className="onboarding-count">
@@ -126,25 +131,26 @@ export function OnboardingDialog({ shell, draft, groups }: { shell: Shell; draft
           <Check size={18} />
         </div>
         <div>
-          <strong>{formatCount(draft.onboardingIds.length, '个技能')}已加入中央库</strong>
-          <span>可以加入现有分组、创建新分组，或直接跳过。</span>
+          <strong>{t('dialogs.importedCount', { count: draft.onboardingIds.length })}</strong>
+          <span>{t('dialogs.addToAnExistingGroupCreateANewGroupOr')}</span>
         </div>
       </div>
       <GroupPicker
         groups={groups}
         draft={draft}
-        selectLabel="加入现有分组"
-        separator="或新建分组"
-        nameLabel="分组名称"
-        placeholder="例如：产品研究"
+        selectLabel={t('dialogs.addToExistingGroup')}
+        separator={t('dialogs.createGroupAlternative')}
+        nameLabel={t('dialogs.groupName')}
+        placeholder={t('dialogs.eGProductResearch')}
         autoFocus
       />
       <div className="dialog-footer spread">
         <button className="button subtle" onClick={draft.closeOnboarding}>
-          跳过
+          {t('dialogs.skip')}
         </button>
         <button className="button primary" disabled={!draft.groupId && !draft.name.trim()} onClick={() => void draft.saveOnboarding()}>
-          {busy === 'group' ? <LoaderCircle size={15} className="spin" /> : <Plus size={15} />}加入分组
+          {busy === 'group' ? <LoaderCircle size={15} className="spin" /> : <Plus size={15} />}
+          {t('dialogs.submitGroupMembership')}
         </button>
       </div>
       <FormError error={error} onDismiss={() => setError('')} />
@@ -163,12 +169,13 @@ export function SelectedDialog({
   view: LibraryView;
   onApply: () => void;
 }) {
+  const t = useT();
   const { selected } = view;
   return (
     <ModalShell
       locked={!!shell.busy}
-      title="当前已选技能"
-      subtitle={`${selected.size} 个唯一技能；选择集合跨分类视图保留。`}
+      title={t('dialogs.selectedSkills')}
+      subtitle={t('dialogs.uniqueSkillsYourSelectionIsKeptAcrossViews', { size: selected.size })}
       onClose={() => shell.setDialog(null)}
     >
       <div className="selected-list">
@@ -182,7 +189,11 @@ export function SelectedDialog({
                 <strong>{skill.name}</strong>
                 <small>{sourceName(snapshot, skill.sourceId)}</small>
               </span>
-              <button className="icon-button small" aria-label={`移除 ${skill.name}`} onClick={() => view.toggleOne(skill.id)}>
+              <button
+                className="icon-button small"
+                aria-label={t('dialogs.remove', { name: skill.name })}
+                onClick={() => view.toggleOne(skill.id)}
+              >
                 <X size={14} />
               </button>
             </div>
@@ -190,10 +201,11 @@ export function SelectedDialog({
       </div>
       <div className="dialog-footer spread">
         <button className="button subtle" onClick={() => shell.setDialog(null)}>
-          继续选择
+          {t('dialogs.continueSelecting')}
         </button>
         <button className="button primary" disabled={!selected.size} onClick={onApply}>
-          应用所选 <ArrowRight size={15} />
+          {t('dialogs.applySelected')}
+          <ArrowRight size={15} />
         </button>
       </div>
     </ModalShell>

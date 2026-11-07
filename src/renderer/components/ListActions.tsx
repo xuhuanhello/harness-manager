@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 
 type Props = {
@@ -19,13 +20,19 @@ export default function ListActions({
   onToggleSelection,
   className = '',
 }: Props) {
+  const t = useT();
   if (expandableCount <= 0 && (!selectableCount || !onToggleSelection)) return null;
   return (
     <div className={`list-actions ${className}`.trim()}>
       {expandableCount > 0 && (
-        <button type="button" className="list-action-button" onClick={onToggleExpanded} aria-label={allExpanded ? '全部折叠' : '全部展开'}>
+        <button
+          type="button"
+          className="list-action-button"
+          onClick={onToggleExpanded}
+          aria-label={allExpanded ? t('library.collapseAll') : t('library.expandAll')}
+        >
           {allExpanded ? <ChevronsDownUp size={13} /> : <ChevronsUpDown size={13} />}
-          {allExpanded ? '全部折叠' : '全部展开'}
+          {allExpanded ? t('library.collapseAll') : t('library.expandAll')}
         </button>
       )}
       {!!selectableCount && onToggleSelection && (
@@ -33,9 +40,9 @@ export default function ListActions({
           type="button"
           className="list-action-button"
           onClick={onToggleSelection}
-          aria-label={allSelected ? '取消全选' : `全选 ${selectableCount} 项`}
+          aria-label={allSelected ? t('library.deselectAll') : t('library.selectAllItems', { selectableCount: selectableCount })}
         >
-          {allSelected ? '取消全选' : `全选 ${selectableCount} 项`}
+          {allSelected ? t('library.deselectAll') : t('library.selectAllItems', { selectableCount: selectableCount })}
         </button>
       )}
     </div>

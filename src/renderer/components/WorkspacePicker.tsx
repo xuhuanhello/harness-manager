@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, FolderOpen } from 'lucide-react';
 import type { Snapshot } from '../../shared/types';
@@ -11,6 +12,7 @@ export function WorkspacePicker({
   value: string;
   onChange: (id: string) => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -56,17 +58,19 @@ export function WorkspacePicker({
         ref={trigger}
         className="agent-workspace-trigger"
         type="button"
-        aria-label="选择工作区"
+        aria-label={t('workspace.chooseWorkspace')}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
         <FolderOpen size={14} />
-        <span>{selected ? `${selected.name || selected.path.split(/[\\/]/).at(-1)} · ${selected.path}` : '选择已知工作区…'}</span>
+        <span>
+          {selected ? `${selected.name || selected.path.split(/[\\/]/).at(-1)} · ${selected.path}` : t('workspace.chooseAKnownWorkspace')}
+        </span>
         <ChevronDown size={14} />
       </button>
       {open && (
-        <div className="agent-workspace-options" role="listbox" aria-label="已知工作区">
+        <div className="agent-workspace-options" role="listbox" aria-label={t('workspace.knownWorkspaces')}>
           {workspaces.map((workspace) => (
             <button
               key={workspace.id}

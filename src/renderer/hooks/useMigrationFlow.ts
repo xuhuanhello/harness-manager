@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { useState } from 'react';
 import { errorMessage } from '../../shared/errors';
 import type { HarnessAPI } from '../../shared/ipc-contract';
@@ -8,6 +9,7 @@ import type { Shell } from './useShell';
 
 /** Migrating an external skill into the central library, including repairing managed links that block it. */
 export function useMigrationFlow(api: HarnessAPI | undefined, shell: Shell, data: LibraryData) {
+  const t = useT();
   const { setBusy, setDialog, setToast } = shell;
   const [target, setTarget] = useState<ExternalSkill | null>(null);
   const [preview, setPreview] = useState<ExternalMigrationPreview | null>(null);
@@ -32,9 +34,9 @@ export function useMigrationFlow(api: HarnessAPI | undefined, shell: Shell, data
     resetIssues();
     setBusy('migration-preview');
     try {
-      if (!api) throw new Error('桌面应用连接不可用。');
+      if (!api) throw new Error(t('library.desktopConnectionUnavailable'));
       const next = await api.previewMigrateExternal({ externalSkillId });
-      if (next.externalSkillId !== externalSkillId) throw new Error('预览返回的技能与所选技能不匹配。');
+      if (next.externalSkillId !== externalSkillId) throw new Error(t('library.thePreviewSkillsDoNotMatchTheSelection'));
       setPreview(next);
     } catch (cause) {
       setError(errorMessage(cause));
@@ -78,7 +80,7 @@ export function useMigrationFlow(api: HarnessAPI | undefined, shell: Shell, data
       else {
         setRepairs([]);
         setRepairsChecked(false);
-        setError('链接修复未全部完成。请查看逐项结果，确认路径或权限后重新检测。');
+        setError(t('library.someLinksCouldNotBeRepairedReviewTheResultsAnd'));
       }
     } catch (cause) {
       const reason = errorMessage(cause);
@@ -89,7 +91,7 @@ export function useMigrationFlow(api: HarnessAPI | undefined, shell: Shell, data
       setExpandedRepairId('');
       setRepairs([]);
       setRepairsChecked(false);
-      setError(`链接修复没有完成：${reason} 请检查 Harness 设置或目录权限后重新检测。`);
+      setError(t('library.linkRepairIncompleteCheckHarnessSettingsOrDirectoryPermissionsAnd', { reason: reason }));
     } finally {
       setBusy('');
     }
@@ -104,7 +106,7 @@ export function useMigrationFlow(api: HarnessAPI | undefined, shell: Shell, data
       await data.refresh();
     } catch {
       setPreview(null);
-      setToast('迁移时目录状态发生变化，正在重新检测来源和引用。');
+      setToast(t('library.directoryStateChangedDuringMigrationCheckingSourcesAndReferencesAgain'));
       await loadPreview(target.id);
     } finally {
       setBusy('');

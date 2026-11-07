@@ -1,8 +1,10 @@
+import { useT } from '../i18n';
 import { ArrowDownToLine, ArrowRight, Check, CircleHelp, LoaderCircle, X } from 'lucide-react';
 import type { ApplyPlan, BatchResult, PlanItem } from '../../shared/types';
 
 /** Apply preview and results. */
 export function ApplyPreview({ plan, onContinue, busy }: { plan: ApplyPlan; onContinue: () => void; busy: boolean }) {
+  const t = useT();
   const counts = plan.items.reduce(
     (acc, item) => {
       acc[item.status] += 1;
@@ -15,26 +17,29 @@ export function ApplyPreview({ plan, onContinue, busy }: { plan: ApplyPlan; onCo
     <div className="apply-preview">
       <div className="preview-title-row">
         <div>
-          <p className="eyebrow">确认前预览</p>
+          <p className="eyebrow">{t('library.reviewBeforeApplying')}</p>
           <strong>
-            {new Set(plan.items.map((item) => item.skillId)).size} 个技能 · {plan.items.length} 个目标位置
+            {t('library.applyPreviewCount', {
+              skills: new Set(plan.items.map((item) => item.skillId)).size,
+              destinations: plan.items.length,
+            })}
           </strong>
         </div>
         <button className="text-button" onClick={onContinue} disabled={busy}>
           {busy ? <LoaderCircle size={14} className="spin" /> : <ArrowDownToLine size={14} />}
-          {conflicts ? '继续无冲突项' : '确认应用'}
+          {conflicts ? t('library.continueWithoutConflicts') : t('library.apply')}
         </button>
       </div>
       <div className="preview-counts">
-        <span className="new">{counts.new} 新增</span>
-        <span className="existing">{counts.existing} 已存在</span>
-        <span className="sync">{counts.sync} 待同步</span>
-        {conflicts && <span className="conflict">{counts.conflict} 冲突</span>}
+        <span className="new">{t('library.newCount', { count: counts.new })}</span>
+        <span className="existing">{t('library.existingCount', { count: counts.existing })}</span>
+        <span className="sync">{t('library.syncCount', { count: counts.sync })}</span>
+        {conflicts && <span className="conflict">{t('library.conflictCount', { count: counts.conflict })}</span>}
       </div>
       {conflicts && (
         <div className="conflict-note">
           <CircleHelp size={14} />
-          <span>冲突项不会被覆盖。确认后主进程会逐项跳过冲突目标，并继续处理其他项。</span>
+          <span>{t('library.conflictingItemsWillBeKeptTheAppWillSkipEach')}</span>
         </div>
       )}
       <div className="preview-list">
@@ -43,14 +48,24 @@ export function ApplyPreview({ plan, onContinue, busy }: { plan: ApplyPlan; onCo
         ))}
       </div>
       <p className="preview-strategy">
-        策略：{plan.request.strategy === 'symlink' ? '软链' : '兼容复制'} · 工作区共享目录可能被同一工作区内的其他兼容 Agent 识别。
+        {t('library.strategySummary', {
+          strategy: plan.request.strategy === 'symlink' ? t('library.symlink') : t('library.copyForCompatibility'),
+        })}
       </p>
     </div>
   );
 }
 
 export function PreviewRow({ item }: { item: PlanItem }) {
-  const label = item.status === 'new' ? '新增' : item.status === 'existing' ? '已存在' : item.status === 'sync' ? '待同步' : '冲突';
+  const t = useT();
+  const label =
+    item.status === 'new'
+      ? t('library.newStatus')
+      : item.status === 'existing'
+        ? t('library.alreadyExists')
+        : item.status === 'sync'
+          ? t('library.outOfSyncStatus')
+          : t('library.conflict');
   return (
     <div className={`preview-row ${item.status}`}>
       <span className="preview-status-icon">
@@ -69,6 +84,7 @@ export function PreviewRow({ item }: { item: PlanItem }) {
 }
 
 export function ApplyResults({ result, onDone }: { result: BatchResult; onDone: () => void }) {
+  const t = useT();
   const succeeded = result.items.filter((item) => item.status === 'success').length;
   const skipped = result.items.filter((item) => item.status === 'skipped').length;
   const failed = result.items.filter((item) => item.status === 'error').length;
@@ -79,10 +95,8 @@ export function ApplyResults({ result, onDone }: { result: BatchResult; onDone: 
           <Check size={17} />
         </span>
         <div>
-          <strong>{failed ? '部分操作未完成' : '操作已完成'}</strong>
-          <span>
-            {succeeded} 成功 · {skipped} 跳过 · {failed} 失败
-          </span>
+          <strong>{failed ? t('library.someOperationsWereNotCompleted') : t('library.operationCompleted')}</strong>
+          <span>{t('common.resultSummary', { succeeded, skipped, failed })}</span>
         </div>
       </div>
       <div className="result-list">
@@ -93,14 +107,21 @@ export function ApplyResults({ result, onDone }: { result: BatchResult; onDone: 
             </span>
             <div>
               <strong>{item.label}</strong>
-              <span>{item.message || (item.status === 'success' ? '已完成' : item.status === 'skipped' ? '已跳过' : '操作失败')}</span>
+              <span>
+                {item.message ||
+                  (item.status === 'success'
+                    ? t('library.completed')
+                    : item.status === 'skipped'
+                      ? t('library.skippedStatus')
+                      : t('library.operationFailed'))}
+              </span>
             </div>
           </div>
         ))}
       </div>
       <div className="dialog-footer">
         <button className="button primary" onClick={onDone}>
-          完成
+          {t('library.done')}
         </button>
       </div>
     </>

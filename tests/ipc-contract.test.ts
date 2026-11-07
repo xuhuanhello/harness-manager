@@ -41,7 +41,22 @@ describe('IPC contract', () => {
 
   it('keeps the queueing and refresh behavior of each action', () => {
     const unqueued = ACTIONS.filter((action) => routes[action].queue === 'none');
-    expect(unqueued.sort()).toEqual(['checkUpdates', 'chooseDirectory', 'detectHarnessInstallations', 'marketplaceCatalog']);
+    expect(unqueued.sort()).toEqual(
+      [
+        'appInfo',
+        'appUpdateState',
+        'cancelAppUpdate',
+        'checkAppUpdate',
+        'checkUpdates',
+        'chooseDirectory',
+        'detectHarnessInstallations',
+        'downloadAppUpdate',
+        'installAppUpdate',
+        'marketplaceCatalog',
+        'openAppUpdatePage',
+        'openAppUpdateSettings',
+      ].sort(),
+    );
     const readOnly = ACTIONS.filter((action) => routes[action].queue === 'state' && !routes[action].mutates);
     expect(readOnly.sort()).toEqual(
       [
@@ -52,6 +67,8 @@ describe('IPC contract', () => {
         'previewApply',
         'previewHarnessCleanup',
         'previewMigrateExternal',
+        'revealDistribution',
+        'revealExternalSkill',
         'revealHarnessDirectory',
         'revealSkill',
         'scan',
@@ -70,10 +87,36 @@ describe('IPC contract', () => {
     expect(both.success ? '' : both.error.issues[0].message).toBe('识别分组与自定义分组不能同时指定。');
     expect(contract.saveGroup.input.safeParse({ groupId: '../outside', skillIds: [skillId] }).success).toBe(false);
     expect(contract.saveSettings.input.safeParse({ viewMode: 'unknown' }).success).toBe(false);
+    expect(contract.saveSettings.input.safeParse({ appUpdates: { autoCheck: true, url: 'http://evil' } }).success).toBe(false);
+    for (const action of [
+      'appUpdateState',
+      'checkAppUpdate',
+      'downloadAppUpdate',
+      'cancelAppUpdate',
+      'installAppUpdate',
+      'openAppUpdateSettings',
+    ] as const) {
+      await expect(app.invoke(action, { url: 'http://evil' })).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    }
+    await expect(app.invoke('openAppUpdatePage', { url: 'https://github.com/evil/repo/releases' })).rejects.toThrow();
 
     const rejected = app.invoke('apply', { skillIds: [], harnessIds: ['codex'], scope: 'user', strategy: 'symlink' });
     await expect(rejected).rejects.toBeInstanceOf(AppError);
     await expect(rejected).rejects.toMatchObject({ code: 'INVALID_REQUEST', message: expect.stringMatching(/^skillIds：.*[一-鿿]/) });
+  });
+
+  it('rejects arbitrary paths, malformed IDs and appInfo payloads before any OS effect', async () => {
+    const shown: string[] = [];
+    const { app } = await controller({ showItemInFolder: (value) => void shown.push(value) });
+    const externalSkillId = `external-${'a'.repeat(32)}`;
+    for (const payload of [{ path: '/arbitrary' }, { externalSkillId: '../arbitrary' }, { externalSkillId, path: '/arbitrary' }]) {
+      await expect(app.invoke('revealExternalSkill', payload)).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    }
+    for (const payload of [{ path: '/arbitrary' }, { distributionId: '' }, { distributionId: 'known', path: '/arbitrary' }]) {
+      await expect(app.invoke('revealDistribution', payload)).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    }
+    await expect(app.invoke('appInfo', {})).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(shown).toEqual([]);
   });
 
   it('saves every field of a custom Harness and rejects the universal kind', async () => {

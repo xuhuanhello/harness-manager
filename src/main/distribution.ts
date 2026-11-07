@@ -1,3 +1,5 @@
+import { formatList } from '../shared/i18n';
+import { harnessDisplayName } from '../shared/harness-registry';
 import { randomUUID } from 'node:crypto';
 import { mkdir, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -108,7 +110,7 @@ export class DistributionService {
 
     for (const peers of plannedNames.values()) {
       if (peers.length < 2 || peers.every((item) => item.skillId === peers[0].skillId)) continue;
-      const names = [...new Set(peers.map((item) => item.skillName))].join(', ');
+      const names = formatList(new Set(peers.map((item) => item.skillName)));
       for (const item of peers) {
         item.status = 'conflict';
         item.message = message('APPLY_NAME_COLLISION', { names });
@@ -398,13 +400,13 @@ export class DistributionService {
         detail = message('APPLY_HEALTHY');
       }
     }
-    const harnessNames = target.harnesses.map((item) => item.name);
+    const harnessNames = target.harnesses.map((harness) => harnessDisplayName(harness));
     if (harnessNames.length > 1) {
-      detail = [detail, message('APPLY_SHARED_DIRECTORY', { names: harnessNames.join('、') })].filter(Boolean).join(' ');
+      detail = [detail, message('APPLY_SHARED_DIRECTORY', { names: formatList(harnessNames) })].filter(Boolean).join(' ');
     }
     const alsoVisible = await this.entriesReadElsewhere(skill, target, context);
     if (alsoVisible.length) {
-      detail = [detail, message('APPLY_ALSO_READ_ELSEWHERE', { paths: alsoVisible.join('、') })].filter(Boolean).join(' ');
+      detail = [detail, message('APPLY_ALSO_READ_ELSEWHERE', { paths: formatList(alsoVisible) })].filter(Boolean).join(' ');
     }
     return {
       skillId: skill.id,

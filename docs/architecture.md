@@ -8,6 +8,7 @@ flowchart LR
   API --> IPC[Electron IPC\n结果封装为 ok / error]
   IPC --> ENTRY[主进程入口\nsrc/main/index.ts]
   ENTRY --> CTRL[Controller\n契约校验 · 路由表 · 操作队列]
+  ENTRY --> APPUPD[AppUpdater\n应用更新状态 · 下载 · 安装]
   CTRL --> SVC[createServices\n组合根]
   SVC --> LIB[LibraryService]
   SVC --> UPD[UpdateService]
@@ -34,6 +35,7 @@ flowchart LR
   DIST --> FS
   MIG --> FS
   MARKET -. 固定上游接口 .-> WEB[skills.sh / SkillsMP]
+  APPUPD -. Electron net.fetch .-> RELEASES[GitHub Releases]
 ```
 
 ## Electron 进程与 API 边界
@@ -114,6 +116,8 @@ Harness 的每个字段在 `src/shared/harness-fields.ts` 中归入一组：目�
 自定义市场来源只代表可打开的网站地址，不意味着应用已实现其目录协议。内置目录适配器固定连接 skills.sh 和 SkillsMP，从返回数据提取可信 GitHub 仓库与技能目录，再交给现有 Git 扫描、候选选择和中央库安装流程。渲染进程不能指定任意目录服务 URL。适配器限制响应大小、请求时间、缓存和重定向，只解析响应数据，不执行远端脚本。
 
 ## 渲染进程
+
+应用本体更新由 `AppUpdater` 独立管理，不占用资料库写入队列，也不复用技能来源的 `UpdateService`。入口注入 Electron 网络、平台安装与退出操作，控制器路由提供严格校验后的窄接口。`harness:app-update` 向当前窗口推送单一状态，renderer 的 `useAppUpdate` 订阅后同时更新左下角、设置页与确认框；详见[应用更新](updates.md)。
 
 `src/renderer/App.tsx` 只负责组合各功能 hook 并渲染布局：
 

@@ -1,3 +1,7 @@
+import { formatList } from '../i18n';
+import { t, useT } from '../i18n';
+import { useAppInfo } from '../hooks/useAppInfo';
+import { fileManagerLabels } from '../file-manager';
 import { useEffect, useRef, useState } from 'react';
 import ModalShell from './ModalShell';
 import { HardDrive, Folder, Plus, RefreshCw, LoaderCircle, ShieldCheck } from 'lucide-react';
@@ -5,7 +9,11 @@ import type { Harness } from '../../shared/types';
 import type { HarnessInstallationResult, HarnessCleanupPreview } from '../../shared/harness-installation';
 import { isHarnessEnabled } from '../../shared/harness-enabled';
 import { harnessReadPaths } from '../../shared/harness-paths';
-const statusLabel = { installed: '已安装', 'not-found': '未检测到安装', unknown: '无法确认安装' };
+const statusLabels = () => ({
+  installed: t('harness.installed'),
+  'not-found': t('harness.installationNotFound'),
+  unknown: t('harness.installationUnknown'),
+});
 export default function HarnessSettingsPanel({
   harnesses,
   onCreate,
@@ -15,6 +23,8 @@ export default function HarnessSettingsPanel({
   onCreate: () => void;
   onEdit: (value: Harness) => void;
 }) {
+  const t = useT();
+  const fileManager = fileManagerLabels(useAppInfo()?.platform);
   const [results, setResults] = useState<HarnessInstallationResult[]>([]);
   const [toggling, setToggling] = useState('');
   const [checking, setChecking] = useState(false);
@@ -53,16 +63,17 @@ export default function HarnessSettingsPanel({
     <section className="settings-section">
       <div className="settings-section-heading">
         <div>
-          <h2>Harness 管理</h2>
-          <p>仅启用的 Harness 参与统一管理。关闭不会卸载工具或删除已有技能及链接。</p>
+          <h2>{t('harness.harnessManagement')}</h2>
+          <p>{t('harness.onlyEnabledHarnessesAreManagedDisablingOneKeepsTheTool')}</p>
         </div>
         <div className="harness-settings-actions">
           <button className="button subtle" disabled={checking || working} onClick={() => void detect(true)}>
-            {checking ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}检测工具安装
+            {checking ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}
+            {t('harness.detectInstallations')}
           </button>
           <button className="button subtle" onClick={onCreate}>
             <Plus size={15} />
-            自定义 Harness
+            {t('harness.customHarness')}
           </button>
         </div>
       </div>
@@ -72,13 +83,16 @@ export default function HarnessSettingsPanel({
         </div>
       )}
       {preview && (
-        <ModalShell returnFocus={cleanupTrigger.current} title="清理残留预览" locked={working} onClose={() => setPreview(null)}>
+        <ModalShell
+          returnFocus={cleanupTrigger.current}
+          title={t('harness.reviewLeftoverDirectory')}
+          locked={working}
+          onClose={() => setPreview(null)}
+        >
           <div className="cleanup-preview">
-            <strong>确认将这个残留技能目录移入废纸篓？</strong>
+            <strong>{t('harness.moveThisLeftoverSkillDirectoryToTrash')}</strong>
             <code>{preview.path}</code>
-            <p>
-              仅处理预览的空目录或仅含软链的目录。不会删除软链指向的原始技能，也不会删除工具的其他配置、登录信息或缓存。执行前会重新核对安装状态和目录内容；可从系统废纸篓恢复。
-            </p>
+            <p>{t('harness.onlyThePreviewedEmptyOrSymlinkOnlyDirectoryWillBe')}</p>
           </div>
           {error && (
             <div className="form-error" role="alert">
@@ -87,7 +101,7 @@ export default function HarnessSettingsPanel({
           )}
           <div className="harness-settings-actions">
             <button className="button subtle" disabled={working} onClick={() => setPreview(null)}>
-              取消
+              {t('harness.cancel')}
             </button>
             <button
               className="button primary"
@@ -106,7 +120,7 @@ export default function HarnessSettingsPanel({
                 }
               }}
             >
-              确认移入废纸篓
+              {t('harness.moveToTrash')}
             </button>
           </div>
         </ModalShell>
@@ -122,35 +136,45 @@ export default function HarnessSettingsPanel({
                 <strong>
                   {harness.name}
                   <span className="custom-pill">
-                    {harness.kind === 'universal' ? '通用目录' : harness.kind === 'desktop' ? '桌面' : 'CLI'}
+                    {harness.kind === 'universal'
+                      ? t('harness.sharedDirectory')
+                      : harness.kind === 'desktop'
+                        ? t('harness.desktop')
+                        : 'CLI'}
                   </span>
-                  <span className="custom-pill">{harness.origin === 'builtin' ? '内置规范' : '自定义'}</span>
-                  {!enabled && <span className="custom-pill">未启用管理</span>}
+                  <span className="custom-pill">{harness.origin === 'builtin' ? t('harness.builtInRules') : t('harness.custom')}</span>
+                  {!enabled && <span className="custom-pill">{t('harness.managementDisabled')}</span>}
                   {enabled && harness.kind !== 'universal' && (
                     <span className={`installation-status ${result?.status ?? ''}`}>
-                      {result ? statusLabel[result.status] : checking ? '正在检测…' : '尚未检测'}
+                      {result ? statusLabels()[result.status] : checking ? t('harness.detecting') : t('harness.notCheckedYet')}
                     </span>
                   )}
                 </strong>
                 <div className="harness-paths">
                   <span>
                     <HardDrive size={12} />
-                    用户级：
-                    {harnessReadPaths(harness, 'user')
-                      .map((item) => item.path)
-                      .join('、') || '未配置'}
+                    {t('harness.userPaths', {
+                      paths: formatList(harnessReadPaths(harness, 'user').map((item) => item.path)) || t('harness.notConfigured'),
+                    })}
                   </span>
                   <span>
                     <Folder size={12} />
-                    工作区：
-                    {harnessReadPaths(harness, 'workspace')
-                      .map((item) => item.path)
-                      .join('、') || '未配置'}
+                    {t('harness.workspacePaths', {
+                      paths: formatList(harnessReadPaths(harness, 'workspace').map((item) => item.path)) || t('harness.notConfigured'),
+                    })}
                   </span>
                 </div>
                 <div className="harness-read-rules">
-                  通用 .agents/skills：用户级{harness.readsUserAgents || harness.kind === 'universal' ? '支持' : '未声明支持'} · 工作区
-                  {harness.readsWorkspaceAgents || harness.kind === 'universal' ? '支持' : '未声明支持'}
+                  {t('harness.sharedCompatibility', {
+                    user:
+                      harness.readsUserAgents || harness.kind === 'universal'
+                        ? t('harness.compatibilitySupported')
+                        : t('harness.compatibilityNotDeclared'),
+                    workspace:
+                      harness.readsWorkspaceAgents || harness.kind === 'universal'
+                        ? t('harness.compatibilitySupported')
+                        : t('harness.compatibilityNotDeclared'),
+                  })}
                 </div>
                 {result?.reason && <span className="installation-detail">{result.reason}</span>}
                 {result?.executable && (
@@ -165,7 +189,8 @@ export default function HarnessSettingsPanel({
                     .map((item) => (
                       <div className="residual-directory" key={item.path}>
                         <span>
-                          未检测到工具，但存在配置或技能目录：<code>{item.path}</code>
+                          {t('harness.toolNotFoundButConfigurationOrSkillDirectoriesExist')}
+                          <code>{item.path}</code>
                         </span>
                         <span>{item.detail}</span>
                         <div>
@@ -177,7 +202,7 @@ export default function HarnessSettingsPanel({
                                 .catch((cause) => setError(String(cause)));
                             }}
                           >
-                            在访达中检查
+                            {fileManager.inspect}
                           </button>
                           {item.canTrash && (
                             <button
@@ -188,7 +213,7 @@ export default function HarnessSettingsPanel({
                                 void showCleanup(harness.id, item.path);
                               }}
                             >
-                              预览清理
+                              {t('harness.reviewCleanup')}
                             </button>
                           )}
                         </div>
@@ -201,7 +226,7 @@ export default function HarnessSettingsPanel({
                   className="harness-enable-switch"
                   role="switch"
                   aria-checked={enabled}
-                  aria-label={`启用管理 ${harness.name}`}
+                  aria-label={t('harness.enableManagementFor', { name: harness.name })}
                   disabled={!!toggling || working}
                   onClick={async () => {
                     setToggling(harness.id);
@@ -218,10 +243,14 @@ export default function HarnessSettingsPanel({
                   <span className="harness-switch-track">
                     <span />
                   </span>
-                  <span>{toggling === harness.id ? '保存中…' : enabled ? '已启用' : '未启用'}</span>
+                  <span>{toggling === harness.id ? t('harness.saving') : enabled ? t('harness.enabled') : t('harness.disabled')}</span>
                 </button>
-                <button className="button subtle compact" aria-label={`编辑 ${harness.name}`} onClick={() => onEdit(harness)}>
-                  编辑
+                <button
+                  className="button subtle compact"
+                  aria-label={t('harness.edit', { name: harness.name })}
+                  onClick={() => onEdit(harness)}
+                >
+                  {t('harness.editAction')}
                 </button>
               </div>
             </div>
@@ -230,7 +259,7 @@ export default function HarnessSettingsPanel({
       </div>
       <p className="settings-footnote">
         <ShieldCheck size={14} />
-        内置兼容规范不可修改；可补充本机程序路径。仅检测未找到程序时才提示残留目录，不自动清理。
+        {t('harness.builtInCompatibilityRulesAreReadOnlyLocalProgramPaths')}
       </p>
     </section>
   );

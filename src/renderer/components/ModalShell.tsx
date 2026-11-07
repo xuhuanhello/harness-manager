@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
@@ -10,8 +11,10 @@ export default function ModalShell({
   children,
   locked = false,
   returnFocus,
+  initialFocus,
 }: {
   returnFocus?: HTMLElement | null;
+  initialFocus?: string;
   locked?: boolean;
   title: string;
   subtitle?: string;
@@ -19,16 +22,17 @@ export default function ModalShell({
   size?: 'default' | 'wide';
   children: React.ReactNode;
 }) {
+  const t = useT();
   const dialogRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const previous = returnFocus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     dialogRef.current
-      ?.querySelector<HTMLElement>('input:not([disabled]),button:not([disabled]),select:not([disabled])')
+      ?.querySelector<HTMLElement>(initialFocus || 'input:not([disabled]),button:not([disabled]),select:not([disabled])')
       ?.focus({ preventScroll: true });
     return () => {
       if (previous?.isConnected) previous.focus({ preventScroll: true });
     };
-  }, []);
+  }, [initialFocus, returnFocus]);
   const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape') {
       event.stopPropagation();
@@ -72,7 +76,7 @@ export default function ModalShell({
             <h2 id="dialog-title">{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <button className="icon-button modal-close" aria-label="关闭" disabled={locked} onClick={onClose}>
+          <button className="icon-button modal-close" aria-label={t('library.close')} disabled={locked} onClick={onClose}>
             <X size={17} />
           </button>
         </div>

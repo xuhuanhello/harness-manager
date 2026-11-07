@@ -1,38 +1,41 @@
+import { countUnit } from '../i18n';
+import { t, useT } from '../i18n';
 import { CircleHelp, X } from 'lucide-react';
 import { useState } from 'react';
 import type { Marketplace, Snapshot } from '../../shared/types';
 import type { Page } from '../view-types';
 
 export function pageTitle(page: Page, marketplace?: Marketplace): string {
-  if (page === 'library') return '中央技能库';
+  if (page === 'library') return t('library.skillLibrary');
   if (page === 'agent-harness') return 'Agent Harness';
-  if (page === 'marketplace') return marketplace?.name ?? '技能市场';
-  if (page === 'workspaces') return '工作区';
-  return '设置';
+  if (page === 'marketplace') return marketplace?.name ?? t('library.skillMarketplace');
+  if (page === 'workspaces') return t('library.workspaces');
+  return t('library.settings');
 }
 
 function pageDescription(page: Page, marketplace?: Marketplace): string {
-  if (page === 'library') return '整理来自 GitHub 和本地目录的 Agent Skills，再按需应用到目标。';
-  if (page === 'agent-harness') return '按 Harness 查看用户级或已知工作区中的受管技能与外部技能。';
+  if (page === 'library') return t('library.organizeAgentSkillsFromGithubAndLocalDirectoriesThenApply');
+  if (page === 'agent-harness') return t('library.browseManagedAndExternalSkillsByHarnessForYourUser');
   if (page === 'marketplace') {
-    if (marketplace?.id === 'skills-sh') return '浏览技能榜单或搜索关键词，按来源仓库选择安装。';
-    if (marketplace?.id === 'skillsmp') return '搜索 SkillsMP 技能，按来源仓库选择安装。';
-    return '打开自定义市场网站，或到中央技能库添加技能来源。';
+    if (marketplace?.id === 'skills-sh') return t('library.browseRankingsOrSearchKeywordsThenChooseSkillsBySource');
+    if (marketplace?.id === 'skillsmp') return t('library.searchSkillsmpAndChooseSkillsBySourceRepository');
+    return t('library.openACustomMarketplaceWebsiteOrAddASourceIn');
   }
-  if (page === 'workspaces') return '查看指定工作目录中的受管安装，或打开另一个本地工作区。';
-  return '管理 Harness 目录、库位置和本地安装健康。';
+  if (page === 'workspaces') return t('library.viewManagedSkillsInAWorkingDirectoryOrOpenAnother');
+  return t('library.manageHarnessDirectoriesLibraryLocationAndLocalInstallationHealth');
 }
 
-const EYEBROWS: Record<Page, string> = {
-  library: 'YOUR SKILL COLLECTION',
-  'agent-harness': 'HARNESS SKILLS',
-  marketplace: 'DISCOVER SKILLS',
-  workspaces: 'LOCAL WORKSPACES',
-  settings: 'PREFERENCES',
-};
+const eyebrows = (): Record<Page, string> => ({
+  library: t('library.collectionEyebrow'),
+  'agent-harness': t('library.harnessEyebrow'),
+  marketplace: t('library.discoverEyebrow'),
+  workspaces: t('library.workspaceEyebrow'),
+  settings: t('library.preferencesEyebrow'),
+});
 
 /** The shared error banner and the recovery issues reported by the main process. */
 export function PageNotices({ snapshot, error, onDismissError }: { snapshot: Snapshot; error: string; onDismissError: () => void }) {
+  const t = useT();
   const [issuesExpanded, setIssuesExpanded] = useState(false);
   return (
     <>
@@ -40,7 +43,7 @@ export function PageNotices({ snapshot, error, onDismissError }: { snapshot: Sna
         <div className="inline-alert">
           <CircleHelp size={16} />
           <span>{error}</span>
-          <button className="icon-button small" aria-label="关闭提示" onClick={onDismissError}>
+          <button className="icon-button small" aria-label={t('library.dismissMessage')} onClick={onDismissError}>
             <X size={14} />
           </button>
         </div>
@@ -49,10 +52,10 @@ export function PageNotices({ snapshot, error, onDismissError }: { snapshot: Sna
         <div className="recovery-alert">
           <div>
             <CircleHelp size={15} />
-            <span>{snapshot.issues.length} 项需要留意，包含恢复或文件操作记录。</span>
+            <span>{t('library.attentionCount', { count: snapshot.issues.length })}</span>
           </div>
           <button className="text-button" aria-expanded={issuesExpanded} onClick={() => setIssuesExpanded((value) => !value)}>
-            {issuesExpanded ? '收起' : '查看'}
+            {issuesExpanded ? t('library.hide') : t('library.view')}
           </button>
           {issuesExpanded && (
             <ul>
@@ -68,10 +71,11 @@ export function PageNotices({ snapshot, error, onDismissError }: { snapshot: Sna
 }
 
 export function PageHeading({ page, snapshot, marketplace }: { page: Page; snapshot: Snapshot; marketplace?: Marketplace }) {
+  useT();
   return (
     <div className="page-heading">
       <div>
-        <p className="eyebrow">{EYEBROWS[page]}</p>
+        <p className="eyebrow">{eyebrows()[page]}</p>
         <h1>{pageTitle(page, marketplace)}</h1>
         <p className="page-description">{pageDescription(page, marketplace)}</p>
       </div>
@@ -79,17 +83,17 @@ export function PageHeading({ page, snapshot, marketplace }: { page: Page; snaps
         <div className="heading-stats">
           <div>
             <strong>{snapshot.skills.length}</strong>
-            <span>已收录技能</span>
+            <span>{countUnit(snapshot.skills.length, 'importedSkill')}</span>
           </div>
           <i />
           <div>
             <strong>{snapshot.sources.length}</strong>
-            <span>个来源</span>
+            <span>{countUnit(snapshot.sources.length, 'source')}</span>
           </div>
           <i />
           <div>
             <strong>{snapshot.groups.length}</strong>
-            <span>个分组</span>
+            <span>{countUnit(snapshot.groups.length, 'group')}</span>
           </div>
         </div>
       )}

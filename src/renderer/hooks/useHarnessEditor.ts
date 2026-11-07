@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { useState } from 'react';
 import type { HarnessAPI } from '../../shared/ipc-contract';
 import type { Harness, HarnessInput } from '../../shared/types';
@@ -20,6 +21,7 @@ const NEW_HARNESS = {
 
 /** Adding or editing a Harness, from Settings or from the apply dialog (which it returns to). */
 export function useHarnessEditor(api: HarnessAPI | undefined, shell: Shell, data: LibraryData, apply: ApplyFlow) {
+  const t = useT();
   const [input, setInput] = useState<HarnessInput>({ name: '', icon: '', userSkillsPath: '', workspaceSkillsRelativePath: '' });
   const [returnPage, setReturnPage] = useState<Page>('settings');
 
@@ -38,7 +40,7 @@ export function useHarnessEditor(api: HarnessAPI | undefined, shell: Shell, data
       await data.refresh();
       close();
       if (returnPage === 'library') apply.addHarness(saved.id);
-      shell.setToast(`${saved.name} 已保存。`);
+      shell.setToast(t('harness.saved', { name: saved.name }));
     });
 
   return { input, setInput, open, close, save };

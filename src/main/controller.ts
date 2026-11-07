@@ -1,11 +1,14 @@
+import { currentLocale } from '../shared/i18n';
 import type { Action } from '../shared/ipc-actions';
-import { type ActionOutput, type ActionPayload, contract } from '../shared/ipc-contract';
-import type { Settings, Snapshot } from '../shared/types';
+import { type ActionOutput, type ActionPayload, contract, configureValidationLocale } from '../shared/ipc-contract';
+import type { AppInfo, Settings, Snapshot } from '../shared/types';
 import { appError } from './messages';
 import { LibraryObserver } from './observer';
 import { type Route, routes } from './routes';
 import { createServices, type Services } from './services';
 import { Store } from './store';
+import { AppUpdater } from './app-updater';
+import path from 'node:path';
 
 /** Operating-system effects, injected so the controller stays testable outside Electron. */
 export interface PlatformPorts {
@@ -41,14 +44,30 @@ export class Controller {
   readonly catalog: Services['catalog'];
   readonly locations: Services['locations'];
   readonly ports: PlatformPorts;
+  readonly appInfo: AppInfo;
+  readonly appUpdater: AppUpdater;
   private queue: Promise<unknown> = Promise.resolve();
   private observer?: LibraryObserver;
   constructor(
     root: string,
     private changed: () => void = () => {},
-    private options: { watch?: boolean; ports?: Partial<PlatformPorts> } = {},
+    private options: { watch?: boolean; ports?: Partial<PlatformPorts>; appInfo?: AppInfo; appUpdater?: AppUpdater } = {},
   ) {
+    this.appInfo = options.appInfo ?? { version: '', platform: process.platform };
     this.ports = { ...defaultPorts, ...options.ports };
+    this.appUpdater =
+      options.appUpdater ??
+      new AppUpdater({
+        version: this.appInfo.version || '0.0.0',
+        platform: this.appInfo.platform,
+        arch: process.arch,
+        isPackaged: false,
+        userData: path.dirname(root),
+        fetch: globalThis.fetch,
+        install: async () => unavailable(),
+        quit: () => {},
+        openExternal: this.ports.openExternal,
+      });
     const services = createServices(new Store(root), { trashItem: this.ports.trashItem });
     this.store = services.store;
     this.journal = services.journal;
@@ -102,13 +121,19 @@ export class Controller {
       intents: this.store.list('intents'),
       distributions: this.store.list('distributions'),
       externalSkills,
-      settings: { viewMode: settings?.viewMode ?? 'source', activeTabs: settings?.activeTabs ?? {} },
+      settings: {
+        locale: settings?.locale ?? 'system',
+        viewMode: settings?.viewMode ?? 'source',
+        activeTabs: settings?.activeTabs ?? {},
+        appUpdates: settings?.appUpdates ?? { autoCheck: true },
+      },
       issues,
     };
   }
   /** Validates the payload against the contract, then runs the action's route. */
   async invoke<K extends Action>(action: K, payload: unknown): Promise<ActionOutput<K>> {
     const route = routes[action] as Route<K>;
+    configureValidationLocale(currentLocale());
     const parsed = contract[action].input.safeParse(payload);
     if (!parsed.success) {
       const [issue] = parsed.error.issues;
@@ -133,6 +158,7 @@ export class Controller {
     }
   }
   async close() {
+    this.appUpdater.close();
     this.observer?.close();
     await this.queue;
     this.store.close();

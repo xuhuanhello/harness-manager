@@ -1,4 +1,7 @@
-import { CheckCheck, Folder, Github, LoaderCircle, RefreshCw, Search, Sparkles, Trash2, X } from 'lucide-react';
+import { Trans } from '../i18n';
+import { formatDateTime } from '../i18n';
+import { useT } from '../i18n';
+import { CheckCheck, Folder, Github, LoaderCircle, RefreshCw, Search, Sparkles, X } from 'lucide-react';
 import type { Snapshot } from '../../shared/types';
 import ListActions from '../components/ListActions';
 import { EmptyLibrary, SkillSection, ViewMenu } from '../components/LibraryList';
@@ -7,7 +10,7 @@ import { formatCount, harnessGlyph, modeTitle } from '../format';
 import type { LibraryData } from '../hooks/useLibraryData';
 import type { LibraryView } from '../hooks/useLibraryView';
 import type { Updates } from '../hooks/useUpdates';
-import type { Page, RemovalDraft } from '../view-types';
+import type { Page } from '../view-types';
 import { EmptyHarness } from './AgentHarnessPage';
 
 /** Skills installed for one Harness at user level. */
@@ -26,10 +29,8 @@ export function LibraryPage({
   view,
   data,
   updates,
-  busy,
   onNavigate,
   onAddSource,
-  onRemove,
   onLeaveSelection,
   onPickSkillsToApply,
 }: {
@@ -37,19 +38,17 @@ export function LibraryPage({
   view: LibraryView;
   data: LibraryData;
   updates: Updates;
-  busy: string;
   onNavigate: (page: Page) => void;
   onAddSource: () => void;
-  onRemove: (draft: RemovalDraft) => void;
   onLeaveSelection: () => void;
   onPickSkillsToApply: (message: string) => void;
 }) {
-  const { mode, activeTab, search, setSearch, selectMode } = view;
-  const harnessTab = activeTab === 'all' ? 'universal' : activeTab;
-  const checkedAt = updates.lastCheckedAt?.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  const t = useT();
+  const { mode, search, setSearch, selectMode } = view;
+  const checkedAt = updates.lastCheckedAt ? formatDateTime(updates.lastCheckedAt, { hour: '2-digit', minute: '2-digit' }) : undefined;
   return (
     <>
-      <section className="library-toolbar" aria-label="技能库筛选工具">
+      <section className="library-toolbar" aria-label={t('library.libraryFilters')}>
         <ViewMenu
           value={mode}
           onChange={(value) => {
@@ -65,12 +64,12 @@ export function LibraryPage({
             ref={view.searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索技能、描述或来源…"
-            aria-label="搜索技能"
+            placeholder={t('library.searchSkillsDescriptionsOrSources')}
+            aria-label={t('library.searchSkills')}
           />
           <kbd>⌘ K</kbd>
           {search && (
-            <button className="clear-search" aria-label="清除搜索" onClick={() => setSearch('')}>
+            <button className="clear-search" aria-label={t('library.clearSearch')} onClick={() => setSearch('')}>
               <X size={13} />
             </button>
           )}
@@ -80,12 +79,16 @@ export function LibraryPage({
           className="toolbar-select toolbar-check"
           disabled={updates.checking}
           title={
-            updates.checkError ? `上次检查失败：${updates.checkError}` : checkedAt ? `上次检查：${checkedAt}` : '检查已安装技能的上游更新'
+            updates.checkError
+              ? t('library.lastCheckFailed', { checkError: updates.checkError })
+              : checkedAt
+                ? t('library.lastChecked', { checkedAt: checkedAt })
+                : t('library.checkInstalledSkillsForUpstreamUpdates')
           }
           onClick={() => void updates.runCheck(true)}
         >
           {updates.checking ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}
-          {updates.checking ? '正在检查…' : '检查更新'}
+          {updates.checking ? t('library.checking') : t('library.checkUpdates')}
           {updates.checkError && !updates.checking && <span className="toolbar-check-error" aria-hidden="true" />}
         </button>
         {!updates.viewing && (
@@ -95,7 +98,7 @@ export function LibraryPage({
             onClick={() => (selectMode ? onLeaveSelection() : view.beginSelection())}
           >
             {selectMode ? <X size={15} /> : <CheckCheck size={15} />}
-            {selectMode ? '退出多选' : '选择多个'}
+            {selectMode ? t('library.exitSelection') : t('library.selectMultiple')}
           </button>
         )}
       </section>
@@ -107,11 +110,8 @@ export function LibraryPage({
           snapshot={snapshot}
           view={view}
           data={data}
-          busy={busy}
-          harnessTab={harnessTab}
           onNavigate={onNavigate}
           onAddSource={onAddSource}
-          onRemove={onRemove}
           onPickSkillsToApply={onPickSkillsToApply}
         />
       )}
@@ -124,37 +124,45 @@ function LibraryContent({
   snapshot,
   view,
   data,
-  busy,
-  harnessTab,
   onNavigate,
   onAddSource,
-  onRemove,
   onPickSkillsToApply,
 }: {
   snapshot: Snapshot;
   view: LibraryView;
   data: LibraryData;
-  busy: string;
-  harnessTab: string;
   onNavigate: (page: Page) => void;
   onAddSource: () => void;
-  onRemove: (draft: RemovalDraft) => void;
   onPickSkillsToApply: (message: string) => void;
 }) {
-  const { mode, activeTab, search, setSearch, selectMode, selected, skillOnCurrentView } = view;
+  const t = useT();
+  const { mode, activeTab, harnessId, search, setSearch, selectMode, selected, skillOnCurrentView } = view;
+  const harnessName = snapshot.harnesses.find((harness) => harness.id === harnessId)?.name || 'Harness';
   return (
     <>
       {selectMode && (
         <div className="selection-hint">
           <CheckCheck size={15} />
           <span>
-            已选择 <strong>{view.selectedCount}</strong> 项。可勾选来源或分组来批量选择；当前搜索会限制批量范围。
+            {mode === 'harness' ? (
+              <Trans
+                id="library.harnessSelectionHint"
+                values={{ count: view.selectedCount, harnessName }}
+                render={{ count: (count) => <strong>{count}</strong> }}
+              />
+            ) : (
+              <Trans
+                id="library.selectionHint"
+                values={{ count: view.selectedCount }}
+                render={{ count: (count) => <strong>{count}</strong> }}
+              />
+            )}
           </span>
         </div>
       )}
 
       {mode !== 'flat' && (
-        <div className="category-tabs" role="tablist" aria-label={`${modeTitle(mode)}分类`}>
+        <div className="category-tabs" role="tablist" aria-label={t('library.categoryViewLabel', { value: modeTitle(mode) })}>
           {mode === 'source' && (
             <>
               <button
@@ -163,7 +171,8 @@ function LibraryContent({
                 className={activeTab === 'all' ? 'active' : ''}
                 onClick={() => void data.setActiveTab(mode, 'all')}
               >
-                全部来源<span>{snapshot.skills.length}</span>
+                {t('library.allSources')}
+                <span>{snapshot.skills.length}</span>
               </button>
               {snapshot.sources.map((source) => (
                 <button
@@ -188,7 +197,8 @@ function LibraryContent({
                 className={activeTab === 'all' ? 'active' : ''}
                 onClick={() => void data.setActiveTab(mode, 'all')}
               >
-                全部分组<span>{snapshot.skills.length}</span>
+                {t('library.allGroups')}
+                <span>{snapshot.skills.length}</span>
               </button>
               {snapshot.groups.map((group) => (
                 <button
@@ -209,7 +219,7 @@ function LibraryContent({
                 className={activeTab === 'ungrouped' ? 'active' : ''}
                 onClick={() => void data.setActiveTab(mode, 'ungrouped')}
               >
-                未分组
+                {t('library.ungrouped')}
                 <span>{snapshot.skills.filter((skill) => !snapshot.groups.some((group) => group.skillIds.includes(skill.id))).length}</span>
               </button>
             </>
@@ -224,7 +234,7 @@ function LibraryContent({
                   onClick={() => void data.setActiveTab(mode, 'universal')}
                 >
                   <Sparkles size={14} />
-                  用户级通用
+                  {snapshot.harnesses.find((harness) => harness.id === 'universal')?.name}
                   <span>{userInstallCount(snapshot, 'universal')}</span>
                 </button>
               )}
@@ -251,14 +261,47 @@ function LibraryContent({
       <div className="content-meta">
         <span>
           {mode === 'harness'
-            ? '用户级受管安装'
+            ? t('library.managedUserInstallations')
             : mode === 'flat'
-              ? '所有已安装技能'
+              ? t('library.allInstalledSkills')
               : mode === 'group'
-                ? '业务分组是技能的组织方式，可跨来源组合。'
-                : '按来源查看已安装技能'}
+                ? t('library.groupsOrganizeSkillsAcrossSources')
+                : t('library.browseInstalledSkillsBySource')}
         </span>
         <div className="content-meta-actions">
+          {mode === 'harness' && userInstallCount(snapshot, harnessId) > 0 && (
+            <fieldset className="harness-grouping">
+              <legend>{t('library.harnessViewSections')}</legend>
+              <span aria-hidden="true">{t('library.sections')}</span>
+              <div className="agent-scope-tabs">
+                {(
+                  [
+                    ['group', t('library.groups')],
+                    ['source', t('library.source')],
+                    ['flat', t('library.noSections')],
+                  ] as const
+                ).map(([value, label]) => (
+                  <label
+                    key={value}
+                    className={view.effectiveHarnessGroupBy === value ? 'active' : ''}
+                    title={value === 'group' && !snapshot.groups.length ? t('library.noGroupsYet') : undefined}
+                  >
+                    <input
+                      type="radio"
+                      name="harness-group-by"
+                      value={value}
+                      checked={view.effectiveHarnessGroupBy === value}
+                      aria-checked={view.effectiveHarnessGroupBy === value}
+                      disabled={value === 'group' && !snapshot.groups.length}
+                      title={value === 'group' && !snapshot.groups.length ? t('library.noGroupsYet') : undefined}
+                      onChange={() => view.setHarnessGroupBy(value)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
           <ListActions
             allExpanded={view.allSectionsExpanded}
             onToggleExpanded={view.setAllSectionsExpanded}
@@ -268,66 +311,36 @@ function LibraryContent({
             onToggleSelection={() => view.toggleMany([...skillOnCurrentView])}
           />
           <span className="content-result-count">
-            {formatCount(skillOnCurrentView.size, '个技能')}
-            {search ? ' · 搜索结果' : ''}
+            {formatCount(skillOnCurrentView.size, 'skill')}
+            {search ? t('library.searchResults') : ''}
           </span>
         </div>
       </div>
 
-      {mode === 'harness' &&
-        selectMode &&
-        snapshot.bindings
-          .filter((binding) => binding.scope === 'user' && binding.harnessId === harnessTab)
-          .map((binding) => {
-            const ids = snapshot.intents
-              .filter((intent) => intent.bindingId === binding.id && selected.has(intent.skillId))
-              .map((intent) => intent.skillId);
-            const harnessName = snapshot.harnesses.find((item) => item.id === binding.harnessId)?.name || 'Harness';
-            return (
-              ids.length > 0 && (
-                <button
-                  key={binding.id}
-                  className="button subtle danger-quiet"
-                  disabled={!!busy}
-                  onClick={() =>
-                    onRemove({
-                      bindingId: binding.id,
-                      harnessName,
-                      skillIds: ids,
-                      skillNames: snapshot.skills.filter((skill) => ids.includes(skill.id)).map((skill) => skill.name),
-                    })
-                  }
-                >
-                  <Trash2 size={14} />从 {harnessName} 移除所选 {ids.length} 项
-                </button>
-              )
-            );
-          })}
-
       {mode === 'harness' && !snapshot.harnesses.length ? (
         <div className="empty-search">
-          <strong>尚未启用任何 Harness</strong>
-          <span>在设置中开启需要管理的工具。</span>
+          <strong>{t('library.noHarnessesEnabled')}</strong>
+          <span>{t('library.enableTheToolsYouWantToManageInSettings')}</span>
           <button className="button subtle" onClick={() => onNavigate('settings')}>
-            前往设置
+            {t('library.goToSettings')}
           </button>
         </div>
       ) : snapshot.skills.length === 0 ? (
         <EmptyLibrary onAdd={onAddSource} />
-      ) : skillOnCurrentView.size === 0 && mode === 'harness' ? (
+      ) : skillOnCurrentView.size === 0 && mode === 'harness' && !search.trim() ? (
         <EmptyHarness
           snapshot={snapshot}
-          harnessId={harnessTab}
-          onApply={() => onPickSkillsToApply('选择要应用的技能后，使用右下角“应用”。')}
+          harnessId={harnessId}
+          onApply={() => onPickSkillsToApply(t('library.selectSkillsThenUseApplyAtTheBottomRight'))}
           onOpenHarness={() => onNavigate('agent-harness')}
         />
       ) : skillOnCurrentView.size === 0 && search ? (
         <div className="empty-search">
           <Search size={20} />
-          <strong>没有匹配的技能</strong>
-          <span>试试其他关键词，或清除搜索条件。</span>
+          <strong>{t('library.noMatchingSkills')}</strong>
+          <span>{t('library.tryDifferentKeywordsOrClearTheSearch')}</span>
           <button className="button subtle" onClick={() => setSearch('')}>
-            清除搜索
+            {t('library.clearSearch')}
           </button>
         </div>
       ) : (

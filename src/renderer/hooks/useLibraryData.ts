@@ -1,3 +1,7 @@
+import { harnessDisplayName } from '../../shared/harness-registry';
+import { useT, useLocalePreference, useSystemLocale } from '../i18n';
+import { useAppInfo } from './useAppInfo';
+import { fileManagerLabels } from '../file-manager';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { errorMessage } from '../../shared/errors';
 import { isHarnessEnabled } from '../../shared/harness-enabled';
@@ -7,9 +11,28 @@ import type { Shell } from './useShell';
 
 /** The library snapshot from the main process, a view of it limited to enabled Harnesses, and saved preferences. */
 export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
+  const t = useT();
+  const setLocalePreference = useLocalePreference();
+  const setSystemLocale = useSystemLocale();
+  const appInfo = useAppInfo();
+  useEffect(() => {
+    if (appInfo?.systemLocale) setSystemLocale(appInfo.systemLocale);
+  }, [appInfo?.systemLocale, setSystemLocale]);
+  const fileManager = fileManagerLabels(useAppInfo()?.platform);
   const { setError, setToast, setBusy } = shell;
-  const [allSnapshot, setAllSnapshot] = useState<Snapshot | null>(null);
+  const [storedSnapshot, setAllSnapshot] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const allSnapshot = useMemo(
+    () =>
+      storedSnapshot
+        ? {
+            ...storedSnapshot,
+            harnesses: storedSnapshot.harnesses.map((harness) => ({ ...harness, name: harnessDisplayName(harness, t) })),
+          }
+        : null,
+    [storedSnapshot, t],
+  );
 
   const snapshot = useMemo<Snapshot | null>(() => {
     if (!allSnapshot) return null;
@@ -37,6 +60,7 @@ export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
     if (!api) return;
     try {
       const next = await api.snapshot();
+      setLocalePreference(next.settings.locale);
       setAllSnapshot(next);
       setError('');
     } catch (cause) {
@@ -44,7 +68,7 @@ export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
     } finally {
       setLoading(false);
     }
-  }, [api, setError]);
+  }, [api, setError, setLocalePreference]);
 
   useEffect(() => {
     void refresh();
@@ -63,6 +87,20 @@ export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
   const patchSettings = (patch: Partial<Settings>) =>
     setAllSnapshot((current) => (current ? { ...current, settings: { ...current.settings, ...patch } } : current));
 
+  const setLocale = async (locale: Settings['locale']) => {
+    if (!api || !allSnapshot) return;
+    const previous = allSnapshot.settings.locale;
+    setLocalePreference(locale);
+    patchSettings({ locale });
+    try {
+      await api.saveSettings({ locale });
+    } catch (cause) {
+      setLocalePreference(previous);
+      patchSettings({ locale: previous });
+      setToast(errorMessage(cause));
+    }
+  };
+
   const setMode = async (mode: ViewMode) => {
     if (!snapshot || mode === snapshot.settings.viewMode) return;
     const settings: Partial<Settings> = { viewMode: mode };
@@ -70,7 +108,7 @@ export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
     try {
       await api?.saveSettings(settings);
     } catch (cause) {
-      setToast(`分类偏好保存失败：${errorMessage(cause)}`);
+      setToast(t('library.couldNotSaveViewPreference', { reason: errorMessage(cause) }));
       void refresh();
     }
   };
@@ -82,7 +120,7 @@ export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
     try {
       await api?.saveSettings({ activeTabs });
     } catch (cause) {
-      setToast(`标签偏好保存失败：${errorMessage(cause)}`);
+      setToast(t('library.couldNotSaveTabPreference', { reason: errorMessage(cause) }));
     }
   };
 
@@ -93,7 +131,7 @@ export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
     try {
       await api?.saveSettings({ activeTabs });
     } catch (cause) {
-      setToast(`市场选择保存失败：${errorMessage(cause)}`);
+      setToast(t('library.couldNotSaveMarketplaceSelection', { reason: errorMessage(cause) }));
       void refresh();
     }
   };
@@ -116,9 +154,9 @@ export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
     try {
       await api.checkHealth();
       await refresh();
-      setToast('安装检查已完成。');
+      setToast(t('library.installationCheckCompleted'));
     } catch (cause) {
-      setToast(`检查失败：${errorMessage(cause)}`);
+      setToast(t('library.checkFailed', { reason: errorMessage(cause) }));
     } finally {
       setBusy('');
     }
@@ -128,17 +166,20 @@ export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
     try {
       await api?.openSkillSource({ skillId });
     } catch (cause) {
-      setToast(`无法打开技能网页：${errorMessage(cause)}`);
+      setToast(t('library.couldNotOpenSkillWebpage', { reason: errorMessage(cause) }));
     }
   };
 
-  const revealSkillDirectory = async (skillId: string) => {
+  const reveal = async (request: () => Promise<void> | undefined) => {
     try {
-      await api?.revealSkill({ skillId });
+      await request();
     } catch (cause) {
-      setToast(`无法在访达中显示技能：${errorMessage(cause)}`);
+      setToast(fileManager.skillError(errorMessage(cause)));
     }
   };
+  const revealSkillDirectory = (skillId: string) => reveal(() => api?.revealSkill({ skillId }));
+  const revealExternalSkill = (externalSkillId: string) => reveal(() => api?.revealExternalSkill({ externalSkillId }));
+  const revealDistribution = (distributionId: string) => reveal(() => api?.revealDistribution({ distributionId }));
 
   return {
     allSnapshot,
@@ -149,12 +190,15 @@ export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
     retry,
     patchSettings,
     setMode,
+    setLocale,
     setActiveTab,
     setActiveMarketplace,
     activeMarketplace,
     runHealthCheck,
     openSkillWebpage,
     revealSkillDirectory,
+    revealExternalSkill,
+    revealDistribution,
   };
 }
 
