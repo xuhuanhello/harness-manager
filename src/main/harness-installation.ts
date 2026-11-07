@@ -221,6 +221,8 @@ export class HarnessInstallationService {
   /** Detects only executable/app evidence. Configured skill directories never imply installation. */
   async detect(harnesses: readonly Harness[], options: { refresh?: boolean } = {}): Promise<HarnessInstallationResult[]> {
     const selected = harnesses.filter((harness) => harness && typeof harness.id === 'string' && !!harness.id && isHarnessEnabled(harness));
+    // Results carry localized reasons; cache them under the language they were produced in.
+    const locale = currentLocale();
     if (options.refresh) this.registryPaths = undefined;
     for (const harness of selected) this.knownHarnesses.set(harness.id, harness);
     this.pruneExpired();
@@ -250,8 +252,7 @@ export class HarnessInstallationService {
     );
     for (const result of results) {
       const harness = everyHarness.find((item) => item.id === result.harnessId);
-      if (harness)
-        this.cache.set(harness.id, { key: `${currentLocale()}:${definitionKey(harness)}`, expiresAt: this.now() + this.cacheMs, result });
+      if (harness) this.cache.set(harness.id, { key: `${locale}:${definitionKey(harness)}`, expiresAt: this.now() + this.cacheMs, result });
     }
     return results.map((result) => structuredClone(result));
   }

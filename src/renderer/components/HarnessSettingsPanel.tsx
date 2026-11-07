@@ -1,5 +1,5 @@
 import { formatList } from '../i18n';
-import { t, useT } from '../i18n';
+import { t, useLocale, useT } from '../i18n';
 import { useAppInfo } from '../hooks/useAppInfo';
 import { fileManagerLabels } from '../file-manager';
 import { useEffect, useRef, useState } from 'react';
@@ -32,20 +32,25 @@ export default function HarnessSettingsPanel({
   const [preview, setPreview] = useState<HarnessCleanupPreview | null>(null);
   const [working, setWorking] = useState(false);
   const cleanupTrigger = useRef<HTMLButtonElement | null>(null);
+  const locale = useLocale();
+  const latestRequest = useRef(0);
   const detect = async (refresh = false) => {
+    // Only the latest request may update the panel, so a slower reply in the previous language is dropped.
+    const request = ++latestRequest.current;
     setChecking(true);
     setError('');
     try {
-      setResults(await window.harness.detectHarnessInstallations({ refresh }));
+      const next = await window.harness.detectHarnessInstallations({ refresh });
+      if (request === latestRequest.current) setResults(next);
     } catch (cause) {
-      setError(String(cause));
+      if (request === latestRequest.current) setError(String(cause));
     } finally {
-      setChecking(false);
+      if (request === latestRequest.current) setChecking(false);
     }
   };
   useEffect(() => {
     void detect();
-  }, [JSON.stringify(harnesses)]);
+  }, [JSON.stringify(harnesses), locale]);
   const showCleanup = async (harnessId: string, path: string) => {
     setWorking(true);
     setError('');

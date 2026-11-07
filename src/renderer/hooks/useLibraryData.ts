@@ -90,12 +90,11 @@ export function useLibraryData(api: HarnessAPI | undefined, shell: Shell) {
   const setLocale = async (locale: Settings['locale']) => {
     if (!api || !allSnapshot) return;
     const previous = allSnapshot.settings.locale;
-    setLocalePreference(locale);
     patchSettings({ locale });
     try {
       await api.saveSettings({ locale });
+      setLocalePreference(locale);
     } catch (cause) {
-      setLocalePreference(previous);
       patchSettings({ locale: previous });
       setToast(errorMessage(cause));
     }
