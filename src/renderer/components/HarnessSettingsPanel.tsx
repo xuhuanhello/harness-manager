@@ -25,7 +25,7 @@ export default function HarnessSettingsPanel({
 }) {
   const t = useT();
   const fileManager = fileManagerLabels(useAppInfo()?.platform);
-  const [results, setResults] = useState<HarnessInstallationResult[]>([]);
+  const [detected, setDetected] = useState<{ locale: string; results: HarnessInstallationResult[] }>({ locale: '', results: [] });
   const [toggling, setToggling] = useState('');
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
@@ -33,15 +33,18 @@ export default function HarnessSettingsPanel({
   const [working, setWorking] = useState(false);
   const cleanupTrigger = useRef<HTMLButtonElement | null>(null);
   const locale = useLocale();
+  // Detection reasons are written by the main process in one language; hide them until a reply in the shown language arrives.
+  const results = detected.locale === locale ? detected.results : [];
   const latestRequest = useRef(0);
   const detect = async (refresh = false) => {
     // Only the latest request may update the panel, so a slower reply in the previous language is dropped.
     const request = ++latestRequest.current;
+    const requestLocale = locale;
     setChecking(true);
     setError('');
     try {
       const next = await window.harness.detectHarnessInstallations({ refresh });
-      if (request === latestRequest.current) setResults(next);
+      if (request === latestRequest.current) setDetected({ locale: requestLocale, results: next });
     } catch (cause) {
       if (request === latestRequest.current) setError(String(cause));
     } finally {
